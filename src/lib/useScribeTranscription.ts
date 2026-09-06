@@ -8,15 +8,17 @@ import { useCallback, useRef, useState } from "react";
 // The browser connects with a short-lived single-use token (minted by our
 // server at /api/transcription/token) so the API key is never exposed.
 //
-// India residency endpoint is used for DPDP data-residency.
-//
 // NOTE: this captures the LOCAL microphone. Transcribing both participants
 // (doctor + patient) requires the mixed/remote audio track, which needs the
 // call to move off the Daily iframe onto a @daily-co/daily-js custom call
 // (Step 6b). The pipeline below is source-agnostic apart from that.
+//
+// Must match the host the single-use token was minted against (our token
+// endpoint uses the default api.elevenlabs.io). For DPDP data-residency,
+// revisit in the security pass: mint the token AND connect on the same
+// residency host (e.g. api.in.residency.elevenlabs.io).
 
-const WS_BASE =
-  "wss://api.in.residency.elevenlabs.io/v1/speech-to-text/realtime";
+const WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 
 export type TranscriptSegment = { id: number; text: string };
 export type ScribeStatus =
@@ -106,7 +108,11 @@ export function useScribeTranscription(consultationId: string) {
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
-      ws.onopen = () => {
+      let chunksSent = 0;
+
+      ws.onopen = async () => {
+        console.log("[scribe] websocket open; ctx.state=", ctx.state);
+        await ctx.resume().catch(() => {});
         setStatus("listening");
         source.connect(processor);
         processor.connect(mute);
@@ -121,6 +127,10 @@ export function useScribeTranscription(consultationId: string) {
               sample_rate: 16000,
             })
           );
+          chunksSent++;
+          if (chunksSent === 1 || chunksSent % 25 === 0) {
+            console.log("[scribe] audio chunks sent:", chunksSent);
+          }
         };
       };
 
@@ -129,8 +139,10 @@ export function useScribeTranscription(consultationId: string) {
         try {
           msg = JSON.parse(evt.data);
         } catch {
+          console.warn("[scribe] non-JSON message:", evt.data);
           return;
         }
+        console.log("[scribe] <-", msg.message_type, msg.text ?? msg.error ?? "");
         switch (msg.message_type) {
           case "partial_transcript":
             setPartial(msg.text ?? "");
@@ -148,9 +160,21 @@ export function useScribeTranscription(consultationId: string) {
         }
       };
 
-      ws.onerror = () => setError("Transcription connection error.");
-      ws.onclose = () =>
+      ws.onerror = (ev) => {
+        console.error("[scribe] websocket error", ev);
+        setError("Transcription connection error.");
+      };
+      ws.onclose = (ev) => {
+        console.warn(
+          `[scribe] websocket closed code=${ev.code} reason=${ev.reason || "(none)"} chunksSent=${chunksSent}`
+        );
+        if (ev.code !== 1000 && ev.code !== 1005) {
+          setError(
+            `Connection closed (code ${ev.code}${ev.reason ? `: ${ev.reason}` : ""}).`
+          );
+        }
         setStatus((prev) => (prev === "listening" ? "stopped" : prev));
+      };
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start transcription.");
       setStatus("error");
