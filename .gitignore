@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# platform-specific optional deps (lightningcss, etc.) — let each env resolve its own
+package-lock.json
