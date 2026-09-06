@@ -6,8 +6,14 @@ export default function Home() {
       </h1>
       <p className="max-w-md text-sm text-gray-500">
         Phase 1 scaffold. Video consultation, live transcription, and PDF
-        summaries for clinics. Nothing is wired up yet — this is the base app.
+        summaries for clinics.
       </p>
+      <a
+        href="/login"
+        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
+      >
+        Staff login
+      </a>
     </main>
   );
 }
