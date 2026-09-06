@@ -1,0 +1,29 @@
+# Render Blueprint for the clinic consultation app (Next.js).
+# In Render: New + → Blueprint → connect this repo. Render reads this file,
+# then prompts you for each secret env var (sync: false = not stored in git).
+services:
+  - type: web
+    name: videocall
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: DAILY_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: CLINIC_LOGIN_USER
+        sync: false
+      - key: CLINIC_LOGIN_PASSWORD_HASH
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: APP_URL
+        sync: false
