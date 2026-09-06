@@ -35,7 +35,9 @@ export default async function CallPage({
 
   // Consent already recorded → straight into the room. Otherwise gate on consent.
   if (consultation.consentAt) {
-    return <CallFrame name={consultation.name} roomUrl={consultation.roomUrl} />;
+    return (
+      <CallFrame id={id} name={consultation.name} roomUrl={consultation.roomUrl} />
+    );
   }
 
   return (

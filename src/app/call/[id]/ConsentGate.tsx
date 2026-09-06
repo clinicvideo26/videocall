@@ -54,7 +54,7 @@ export default function ConsentGate({
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  if (joined) return <CallFrame name={name} roomUrl={roomUrl} />;
+  if (joined) return <CallFrame id={id} name={name} roomUrl={roomUrl} />;
 
   function join() {
     setError("");
