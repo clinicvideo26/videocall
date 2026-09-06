@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { useScribeTranscription, type ScribeStatus } from "@/lib/useScribeTranscription";
+import { finalizeConsultation } from "./actions";
 
 const statusLabel: Record<ScribeStatus, string> = {
   idle: "Not started",
@@ -17,10 +19,32 @@ export default function TranscriptPanel({
 }: {
   consultationId: string;
 }) {
-  const { status, error, partial, committed, start, stop } =
+  const { status, error, partial, committed, fullText, start, stop } =
     useScribeTranscription(consultationId);
 
+  const [saving, startSaving] = useTransition();
+  const [saveMsg, setSaveMsg] = useState("");
+  const [saved, setSaved] = useState(false);
+
   const active = status === "connecting" || status === "listening";
+
+  function endAndSave() {
+    setSaveMsg("");
+    if (active) stop();
+    startSaving(async () => {
+      const result = await finalizeConsultation(consultationId, fullText);
+      if (result.ok) {
+        setSaved(true);
+        setSaveMsg(
+          result.summarized
+            ? "Saved. Summary generated — view it in the Transcripts tab."
+            : result.error ?? "Transcript saved."
+        );
+      } else {
+        setSaveMsg(result.error ?? "Could not save.");
+      }
+    });
+  }
 
   return (
     <aside className="flex h-full w-full flex-col gap-3 md:w-96">
@@ -47,6 +71,16 @@ export default function TranscriptPanel({
         ))}
         {partial ? <span className="text-gray-400">{partial}</span> : null}
       </div>
+
+      <button
+        type="button"
+        onClick={endAndSave}
+        disabled={saving || (committed.length === 0 && !saved)}
+        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-50"
+      >
+        {saving ? "Saving…" : "End & save consultation"}
+      </button>
+      {saveMsg ? <p className="text-xs text-green-700">{saveMsg}</p> : null}
 
       <p className="text-[11px] leading-snug text-gray-400">
         Note: this currently transcribes only this device&apos;s microphone.
