@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
 import ConsentGate from "./ConsentGate";
 import CallFrame from "./CallFrame";
 
@@ -33,14 +34,28 @@ export default async function CallPage({
 
   if (!consultation) notFound();
 
+  // Only the logged-in doctor sees the live transcript (spec 3.3); the patient
+  // (not logged in) just sees the video.
+  const isDoctor = !!(await getSession());
+
   // Consent already recorded → straight into the room. Otherwise gate on consent.
   if (consultation.consentAt) {
     return (
-      <CallFrame id={id} name={consultation.name} roomUrl={consultation.roomUrl} />
+      <CallFrame
+        id={id}
+        name={consultation.name}
+        roomUrl={consultation.roomUrl}
+        showTranscript={isDoctor}
+      />
     );
   }
 
   return (
-    <ConsentGate id={id} name={consultation.name} roomUrl={consultation.roomUrl} />
+    <ConsentGate
+      id={id}
+      name={consultation.name}
+      roomUrl={consultation.roomUrl}
+      showTranscript={isDoctor}
+    />
   );
 }

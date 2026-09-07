@@ -7,10 +7,12 @@ export default function CallFrame({
   id,
   name,
   roomUrl,
+  showTranscript = false,
 }: {
   id: string;
   name: string;
   roomUrl: string;
+  showTranscript?: boolean;
 }) {
   return (
     <main className="flex flex-1 flex-col">
@@ -26,9 +28,11 @@ export default function CallFrame({
             className="h-full min-h-[60vh] w-full border-0"
           />
         </div>
-        <div className="border-t border-gray-200 p-4 md:border-l md:border-t-0">
-          <TranscriptPanel consultationId={id} />
-        </div>
+        {showTranscript ? (
+          <div className="border-t border-gray-200 p-4 md:border-l md:border-t-0">
+            <TranscriptPanel consultationId={id} />
+          </div>
+        ) : null}
       </div>
     </main>
   );

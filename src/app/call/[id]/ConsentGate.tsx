@@ -43,10 +43,12 @@ export default function ConsentGate({
   id,
   name,
   roomUrl,
+  showTranscript = false,
 }: {
   id: string;
   name: string;
   roomUrl: string;
+  showTranscript?: boolean;
 }) {
   const [agreed, setAgreed] = useState(false);
   const [improve, setImprove] = useState(false);
@@ -54,7 +56,10 @@ export default function ConsentGate({
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  if (joined) return <CallFrame id={id} name={name} roomUrl={roomUrl} />;
+  if (joined)
+    return (
+      <CallFrame id={id} name={name} roomUrl={roomUrl} showTranscript={showTranscript} />
+    );
 
   function join() {
     setError("");
