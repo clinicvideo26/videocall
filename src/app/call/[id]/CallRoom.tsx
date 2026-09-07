@@ -45,10 +45,14 @@ export default function CallRoom({
   roomUrl,
   consultationId,
   showTranscript = false,
+  userName,
+  role,
 }: {
   roomUrl: string;
   consultationId: string;
   showTranscript?: boolean;
+  userName: string;
+  role: "doctor" | "patient";
 }) {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [status, setStatus] = useState<CallStatus>("joining");
@@ -111,6 +115,9 @@ export default function CallRoom({
       setPatientAudioReady(!!track);
     };
 
+    const meLabel = role === "doctor" ? "You (Doctor)" : "You (Patient)";
+    const otherLabel = role === "doctor" ? "Patient" : "Doctor";
+
     const rebuild = () => {
       const participants = call.participants();
       const next: Tile[] = [];
@@ -124,7 +131,7 @@ export default function CallRoom({
         if (!p.local && a && !remoteAudio) remoteAudio = a;
         next.push({
           sessionId: p.session_id,
-          label: p.local ? "You (doctor)" : p.user_name || "Patient",
+          label: p.local ? meLabel : p.user_name || otherLabel,
           isLocal: !!p.local,
           stream: syncStream(p.session_id, tracks),
         });
@@ -167,7 +174,7 @@ export default function CallRoom({
       applyQuality(ev?.cpuLoadState === "high" ? "low" : "medium");
     });
 
-    call.join({ url: roomUrl }).catch((e: unknown) => {
+    call.join({ url: roomUrl, userName }).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : "Could not join the call.");
       setStatus("error");
     });
@@ -178,7 +185,7 @@ export default function CallRoom({
       sessionStreams.clear();
       remoteAudioRef.current = null;
     };
-  }, [roomUrl]);
+  }, [roomUrl, userName, role]);
 
   function toggleMic() {
     const call = callRef.current;

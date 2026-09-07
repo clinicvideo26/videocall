@@ -39,16 +39,18 @@ const copy = {
   },
 };
 
+// Consent is the patient's action, so this is always the patient view: no
+// transcript, and the patient's name labels their video tile.
 export default function ConsentGate({
   id,
   name,
   roomUrl,
-  showTranscript = false,
+  userName,
 }: {
   id: string;
   name: string;
   roomUrl: string;
-  showTranscript?: boolean;
+  userName: string;
 }) {
   const [agreed, setAgreed] = useState(false);
   const [improve, setImprove] = useState(false);
@@ -58,7 +60,14 @@ export default function ConsentGate({
 
   if (joined)
     return (
-      <CallFrame id={id} name={name} roomUrl={roomUrl} showTranscript={showTranscript} />
+      <CallFrame
+        id={id}
+        name={name}
+        roomUrl={roomUrl}
+        showTranscript={false}
+        userName={userName}
+        role="patient"
+      />
     );
 
   function join() {

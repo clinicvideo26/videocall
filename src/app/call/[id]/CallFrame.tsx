@@ -1,18 +1,22 @@
 import CallRoom from "./CallRoom";
 
 // Plain (no "use client") component: safe to render from both the server page
-// and the client-side consent gate. CallRoom owns the Daily call and, for the
-// doctor, the live per-speaker transcript alongside it.
+// and the client-side join/consent gates. CallRoom owns the Daily call and, for
+// the doctor, the live per-speaker transcript alongside it.
 export default function CallFrame({
   id,
   name,
   roomUrl,
   showTranscript = false,
+  userName,
+  role,
 }: {
   id: string;
   name: string;
   roomUrl: string;
   showTranscript?: boolean;
+  userName: string;
+  role: "doctor" | "patient";
 }) {
   return (
     <main className="flex flex-1 flex-col">
@@ -24,6 +28,8 @@ export default function CallFrame({
           roomUrl={roomUrl}
           consultationId={id}
           showTranscript={showTranscript}
+          userName={userName}
+          role={role}
         />
       </div>
     </main>

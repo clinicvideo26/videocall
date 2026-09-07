@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import ConsentGate from "./ConsentGate";
-import CallFrame from "./CallFrame";
+import JoinGate from "./JoinGate";
 
-// Branded wrapper (spec 3.2/3.3). Consent screen first; the room only loads
-// after the patient agrees (or has already agreed on a previous visit).
+// Branded wrapper (spec 3.2/3.3). The visitor first picks a role (Doctor /
+// Patient); the doctor view (with the transcript) still requires a staff login,
+// so choosing "Doctor" without a session is bounced to login.
 export default async function CallPage({
   params,
 }: {
@@ -34,28 +34,15 @@ export default async function CallPage({
 
   if (!consultation) notFound();
 
-  // Only the logged-in doctor sees the live transcript (spec 3.3); the patient
-  // (not logged in) just sees the video.
   const isDoctor = !!(await getSession());
 
-  // Consent already recorded → straight into the room. Otherwise gate on consent.
-  if (consultation.consentAt) {
-    return (
-      <CallFrame
-        id={id}
-        name={consultation.name}
-        roomUrl={consultation.roomUrl}
-        showTranscript={isDoctor}
-      />
-    );
-  }
-
   return (
-    <ConsentGate
+    <JoinGate
       id={id}
       name={consultation.name}
       roomUrl={consultation.roomUrl}
-      showTranscript={isDoctor}
+      isDoctor={isDoctor}
+      consentAlready={!!consultation.consentAt}
     />
   );
 }
