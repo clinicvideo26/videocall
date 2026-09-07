@@ -6,7 +6,7 @@ import { buildConsultationPdf, consultationPdfFilename } from "@/lib/pdf";
 // Generate the consultation PDF on demand from the stored transcript + summary
 // (spec 3.4). Login-protected — this is clinic staff only.
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!(await getSession())) {
@@ -14,6 +14,8 @@ export async function GET(
   }
 
   const { id } = await params;
+  // ?download=1 forces the browser to save the file; otherwise it opens inline.
+  const download = new URL(req.url).searchParams.has("download");
 
   let consultation;
   try {
@@ -38,7 +40,7 @@ export async function GET(
   return new NextResponse(new Blob([pdf], { type: "application/pdf" }), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${consultationPdfFilename(data)}"`,
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${consultationPdfFilename(data)}"`,
     },
   });
 }

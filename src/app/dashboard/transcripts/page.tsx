@@ -76,14 +76,22 @@ export default async function TranscriptsPage() {
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-3">
                       {c.transcript ? (
-                        <a
-                          href={`/api/consultation/${c.id}/pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-medium text-gray-900 underline"
-                        >
-                          View PDF
-                        </a>
+                        <>
+                          <a
+                            href={`/api/consultation/${c.id}/pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-medium text-gray-900 underline"
+                          >
+                            View PDF
+                          </a>
+                          <a
+                            href={`/api/consultation/${c.id}/pdf?download=1`}
+                            className="text-xs font-medium text-gray-900 underline"
+                          >
+                            Download
+                          </a>
+                        </>
                       ) : (
                         <span className="text-xs text-gray-300">No PDF</span>
                       )}
