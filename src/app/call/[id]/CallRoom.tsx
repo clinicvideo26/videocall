@@ -180,7 +180,7 @@ export default function CallRoom({
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 md:flex-row">
+    <div className="flex flex-col gap-3 md:h-full md:flex-row">
       <div className="flex flex-1 flex-col gap-3">
         {status === "error" ? (
           <p role="alert" className="text-sm text-red-600">

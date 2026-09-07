@@ -59,7 +59,7 @@ export default function TranscriptPanel({
   }
 
   return (
-    <aside className="flex h-full w-full flex-col gap-3 md:w-96">
+    <aside className="flex w-full flex-col gap-3 md:h-full md:w-96">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Live transcript</h2>
         <button
@@ -82,7 +82,7 @@ export default function TranscriptPanel({
       </p>
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
-      <div className="min-h-40 flex-1 overflow-y-auto rounded-md border border-gray-200 p-3 text-sm leading-relaxed">
+      <div className="min-h-40 max-h-[45vh] overflow-y-auto rounded-md border border-gray-200 p-3 text-sm leading-relaxed md:max-h-none md:flex-1">
         {committed.length === 0 && partials.length === 0 ? (
           <p className="text-gray-400">
             Transcript will appear here as people speak…
