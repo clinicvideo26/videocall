@@ -52,11 +52,15 @@ export function useScribeTranscription(consultationId: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const nodeRef = useRef<ScriptProcessorNode | null>(null);
+  const nodeRef = useRef<AudioWorkletNode | null>(null);
+  const queueRef = useRef<string[]>([]); // audio captured before the socket opens
   const segId = useRef(0);
 
   const stop = useCallback(() => {
-    nodeRef.current?.disconnect();
+    if (nodeRef.current) {
+      nodeRef.current.port.onmessage = null;
+      nodeRef.current.disconnect();
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     ctxRef.current?.close().catch(() => {});
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) {
@@ -66,6 +70,7 @@ export function useScribeTranscription(consultationId: string) {
     ctxRef.current = null;
     streamRef.current = null;
     wsRef.current = null;
+    queueRef.current = [];
     setPartial("");
     setStatus((prev) => (prev === "error" ? prev : "stopped"));
   }, []);
@@ -86,19 +91,48 @@ export function useScribeTranscription(consultationId: string) {
       }
       const { token } = (await res.json()) as { token: string };
 
-      // 2. Microphone at 16 kHz (AudioContext resamples from the device rate).
+      // 2. Microphone → 16 kHz capture on an AudioWorklet (a dedicated audio
+      // thread), so UI re-renders can't starve it and drop audio. Capture
+      // starts now and is buffered until the socket opens — no opening words
+      // are lost.
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
       const ctx = new AudioContext({ sampleRate: 16000 });
       ctxRef.current = ctx;
+      await ctx.audioWorklet.addModule("/pcm-worklet.js");
+      await ctx.resume().catch(() => {});
       const source = ctx.createMediaStreamSource(stream);
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      nodeRef.current = processor;
-      // Sink through a muted gain node so the processor runs without echoing.
-      const mute = ctx.createGain();
-      mute.gain.value = 0;
+      const node = new AudioWorkletNode(ctx, "pcm-worklet");
+      nodeRef.current = node;
+      queueRef.current = [];
+      let chunksSent = 0;
+
+      const sendChunk = (b64: string) => {
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              message_type: "input_audio_chunk",
+              audio_base_64: b64,
+              commit: false,
+              sample_rate: 16000,
+            })
+          );
+          chunksSent++;
+        } else {
+          queueRef.current.push(b64); // socket not open yet — buffer it
+        }
+      };
+
+      node.port.onmessage = (e: MessageEvent) => {
+        sendChunk(floatTo16BitPcmBase64(e.data as Float32Array));
+      };
+      // The worklet emits no audio, so wiring it to the destination keeps it
+      // pulled by the graph while staying silent (no echo).
+      source.connect(node);
+      node.connect(ctx.destination);
 
       // 3. Realtime WebSocket (VAD auto-commits segments on silence).
       const url =
@@ -108,30 +142,13 @@ export function useScribeTranscription(consultationId: string) {
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
-      let chunksSent = 0;
-
-      ws.onopen = async () => {
+      ws.onopen = () => {
         console.log("[scribe] websocket open; ctx.state=", ctx.state);
-        await ctx.resume().catch(() => {});
         setStatus("listening");
-        source.connect(processor);
-        processor.connect(mute);
-        mute.connect(ctx.destination);
-        processor.onaudioprocess = (e) => {
-          if (ws.readyState !== WebSocket.OPEN) return;
-          ws.send(
-            JSON.stringify({
-              message_type: "input_audio_chunk",
-              audio_base_64: floatTo16BitPcmBase64(e.inputBuffer.getChannelData(0)),
-              commit: false,
-              sample_rate: 16000,
-            })
-          );
-          chunksSent++;
-          if (chunksSent === 1 || chunksSent % 25 === 0) {
-            console.log("[scribe] audio chunks sent:", chunksSent);
-          }
-        };
+        const queued = queueRef.current;
+        queueRef.current = [];
+        for (const b64 of queued) sendChunk(b64); // flush buffered opening audio
+        console.log("[scribe] flushed buffered chunks:", queued.length);
       };
 
       ws.onmessage = (evt) => {
