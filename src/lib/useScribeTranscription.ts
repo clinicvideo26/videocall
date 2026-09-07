@@ -20,7 +20,10 @@ import { useCallback, useRef, useState } from "react";
 
 const WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 
-export type TranscriptSegment = { id: number; text: string };
+// `source` is the spoken-language text from Scribe; `english` is the (possibly
+// translated) text shown and stored. For English speech english === source; for
+// other languages english is filled in asynchronously by the translate call.
+export type TranscriptSegment = { id: number; source: string; english: string | null };
 export type ScribeStatus =
   | "idle"
   | "connecting"
@@ -74,6 +77,27 @@ export function useScribeTranscription(consultationId: string) {
     setPartial("");
     setStatus((prev) => (prev === "error" ? prev : "stopped"));
   }, []);
+
+  // Translate one committed segment to English via our server, then patch it
+  // into place by id (order preserved even if calls resolve out of order).
+  const translateSegment = useCallback(
+    async (id: number, source: string) => {
+      let english = source;
+      try {
+        const res = await fetch("/api/transcription/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ consultationId, text: source }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { english?: string };
+        if (res.ok && data.english?.trim()) english = data.english.trim();
+      } catch {
+        // keep source as a fallback
+      }
+      setCommitted((prev) => prev.map((s) => (s.id === id ? { ...s, english } : s)));
+    },
+    [consultationId]
+  );
 
   const start = useCallback(async () => {
     setError("");
@@ -138,6 +162,7 @@ export function useScribeTranscription(consultationId: string) {
       const url =
         `${WS_BASE}?model_id=scribe_v2_realtime` +
         `&audio_format=pcm_16000&commit_strategy=vad` +
+        `&include_language_detection=true` +
         `&token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
@@ -152,25 +177,40 @@ export function useScribeTranscription(consultationId: string) {
       };
 
       ws.onmessage = (evt) => {
-        let msg: { message_type?: string; text?: string; error?: string };
+        let msg: {
+          message_type?: string;
+          text?: string;
+          error?: string;
+          language_code?: string;
+        };
         try {
           msg = JSON.parse(evt.data);
         } catch {
           console.warn("[scribe] non-JSON message:", evt.data);
           return;
         }
-        console.log("[scribe] <-", msg.message_type, msg.text ?? msg.error ?? "");
+        console.log("[scribe] <-", msg.message_type, msg.language_code ?? "", msg.text ?? msg.error ?? "");
         switch (msg.message_type) {
           case "partial_transcript":
             setPartial(msg.text ?? "");
             break;
           case "committed_transcript":
-          case "committed_transcript_with_timestamps":
-            if (msg.text) {
-              setCommitted((prev) => [...prev, { id: segId.current++, text: msg.text! }]);
-            }
+          case "committed_transcript_with_timestamps": {
             setPartial("");
+            const source = msg.text?.trim();
+            if (!source) break;
+            const id = segId.current++;
+            const lang = (msg.language_code ?? "").toLowerCase();
+            const isEnglish = lang.startsWith("en");
+            // English shows immediately (free); other languages show once
+            // translated (english stays null until then).
+            setCommitted((prev) => [
+              ...prev,
+              { id, source, english: isEnglish ? source : null },
+            ]);
+            if (!isEnglish) translateSegment(id, source);
             break;
+          }
           case "error":
             setError(msg.error ?? "Transcription error.");
             break;
@@ -197,8 +237,10 @@ export function useScribeTranscription(consultationId: string) {
       setStatus("error");
       stop();
     }
-  }, [consultationId, stop]);
+  }, [consultationId, stop, translateSegment]);
 
-  const fullText = committed.map((c) => c.text).join(" ");
+  // English text shown/stored: english when available, else the source (so a
+  // failed/pending translation still preserves the words).
+  const fullText = committed.map((c) => c.english ?? c.source).join(" ");
   return { status, error, partial, committed, fullText, start, stop };
 }

@@ -66,9 +66,16 @@ export default function TranscriptPanel({
         {committed.length === 0 && !partial ? (
           <p className="text-gray-400">Transcript will appear here as people speak…</p>
         ) : null}
-        {committed.map((seg) => (
-          <span key={seg.id}>{seg.text} </span>
-        ))}
+        {committed.map((seg) =>
+          seg.english ? (
+            <span key={seg.id}>{seg.english} </span>
+          ) : (
+            // non-English segment still being translated
+            <span key={seg.id} className="italic text-gray-400">
+              {seg.source}{" "}
+            </span>
+          )
+        )}
         {partial ? <span className="text-gray-400">{partial}</span> : null}
       </div>
 
