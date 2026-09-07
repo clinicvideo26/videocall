@@ -20,6 +20,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 
+// Reconnect tuning for unexpected WebSocket drops (e.g. code 1006 on long
+// calls). The audio pipeline stays alive; only the socket is re-opened with a
+// fresh single-use token.
+const MAX_RECONNECTS = 6;
+const MAX_QUEUE = 400; // ~50s of 128ms audio chunks buffered during a gap
+
 // `source` is the spoken-language text from Scribe; `english` is the (possibly
 // translated) text shown and stored. For English speech english === source; for
 // other languages english is filled in asynchronously by the translate call.
@@ -36,6 +42,7 @@ export type ScribeStatus =
   | "idle"
   | "connecting"
   | "listening"
+  | "reconnecting"
   | "stopped"
   | "error";
 
@@ -89,8 +96,18 @@ export function useScribeTranscription(
   // the Daily call must NOT have its tracks stopped here — that would cut the
   // call's audio for everyone.
   const ownsStreamRef = useRef(false);
+  // Auto-reconnect bookkeeping for unexpected socket drops.
+  const manualStopRef = useRef(false);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef(0);
 
   const stop = useCallback(() => {
+    manualStopRef.current = true;
+    if (reconnectTimerRef.current !== null) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    reconnectAttemptsRef.current = 0;
     if (nodeRef.current) {
       nodeRef.current.port.onmessage = null;
       nodeRef.current.disconnect();
@@ -134,25 +151,16 @@ export function useScribeTranscription(
 
   const start = useCallback(async () => {
     setError("");
+    manualStopRef.current = false;
+    reconnectAttemptsRef.current = 0;
     setStatus("connecting");
     try {
-      // 1. Single-use token from our server.
-      const res = await fetch("/api/transcription/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultationId }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error || `Token request failed (${res.status}).`);
-      }
-      const { token } = (await res.json()) as { token: string };
-
-      // 2. Audio source → 16 kHz capture on an AudioWorklet (a dedicated audio
-      // thread), so UI re-renders can't starve it and drop audio. Capture
-      // starts now and is buffered until the socket opens — no opening words
-      // are lost. The source is either a borrowed stream (e.g. the remote Daily
-      // participant's audio track) or the local mic via getUserMedia.
+      // Audio source → 16 kHz capture on an AudioWorklet (a dedicated audio
+      // thread), so UI re-renders can't starve it and drop audio. The pipeline
+      // stays alive across socket reconnects — only the WebSocket is recreated,
+      // so a dropped connection (e.g. code 1006 on a long call) resumes without
+      // losing the mic/track capture. The source is either a borrowed stream
+      // (the remote Daily participant's audio) or the local mic.
       let stream: MediaStream | null;
       if (getStreamRef.current) {
         stream = await getStreamRef.current();
@@ -175,7 +183,6 @@ export function useScribeTranscription(
       const node = new AudioWorkletNode(ctx, "pcm-worklet");
       nodeRef.current = node;
       queueRef.current = [];
-      let chunksSent = 0;
 
       const sendChunk = (b64: string) => {
         const ws = wsRef.current;
@@ -188,9 +195,11 @@ export function useScribeTranscription(
               sample_rate: 16000,
             })
           );
-          chunksSent++;
         } else {
-          queueRef.current.push(b64); // socket not open yet — buffer it
+          // Socket not open (initial connect or a reconnect gap) — buffer, but
+          // cap so a long outage can't grow memory without bound.
+          queueRef.current.push(b64);
+          if (queueRef.current.length > MAX_QUEUE) queueRef.current.shift();
         }
       };
 
@@ -202,80 +211,114 @@ export function useScribeTranscription(
       source.connect(node);
       node.connect(ctx.destination);
 
-      // 3. Realtime WebSocket (VAD auto-commits segments on silence).
-      const url =
-        `${WS_BASE}?model_id=scribe_v2_realtime` +
-        `&audio_format=pcm_16000&commit_strategy=vad` +
-        `&include_language_detection=true` +
-        `&token=${encodeURIComponent(token)}`;
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
+      // Reconnect scheduler; declared before openSocket so onclose can call it.
+      let scheduleReconnect: (code: number) => void = () => {};
 
-      ws.onopen = () => {
-        console.log("[scribe] websocket open; ctx.state=", ctx.state);
-        setStatus("listening");
-        const queued = queueRef.current;
-        queueRef.current = [];
-        for (const b64 of queued) sendChunk(b64); // flush buffered opening audio
-        console.log("[scribe] flushed buffered chunks:", queued.length);
+      const openSocket = async (): Promise<void> => {
+        // Each connection needs a fresh single-use token.
+        const res = await fetch("/api/transcription/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ consultationId }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error || `Token request failed (${res.status}).`);
+        }
+        const { token } = (await res.json()) as { token: string };
+
+        // Realtime WebSocket (VAD auto-commits segments on silence).
+        const url =
+          `${WS_BASE}?model_id=scribe_v2_realtime` +
+          `&audio_format=pcm_16000&commit_strategy=vad` +
+          `&include_language_detection=true` +
+          `&token=${encodeURIComponent(token)}`;
+        const ws = new WebSocket(url);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          reconnectAttemptsRef.current = 0;
+          setStatus("listening");
+          const queued = queueRef.current;
+          queueRef.current = [];
+          for (const b64 of queued) sendChunk(b64); // flush buffered audio
+        };
+
+        ws.onmessage = (evt) => {
+          let msg: {
+            message_type?: string;
+            text?: string;
+            error?: string;
+            language_code?: string;
+          };
+          try {
+            msg = JSON.parse(evt.data);
+          } catch {
+            return;
+          }
+          switch (msg.message_type) {
+            case "partial_transcript":
+              setPartial(msg.text ?? "");
+              break;
+            case "committed_transcript":
+            case "committed_transcript_with_timestamps": {
+              setPartial("");
+              const src = msg.text?.trim();
+              if (!src) break;
+              const id = segId.current++;
+              const lang = (msg.language_code ?? "").toLowerCase();
+              const isEnglish = lang.startsWith("en");
+              // English shows immediately (free); other languages show once
+              // translated (english stays null until then).
+              setCommitted((prev) => [
+                ...prev,
+                { id, role, at: Date.now(), source: src, english: isEnglish ? src : null },
+              ]);
+              if (!isEnglish) translateSegment(id, src);
+              break;
+            }
+            case "error":
+              setError(msg.error ?? "Transcription error.");
+              break;
+          }
+        };
+
+        ws.onerror = () => {
+          // A close event follows; reconnection is handled in onclose.
+        };
+
+        ws.onclose = (ev) => {
+          if (manualStopRef.current) return; // user pressed Stop
+          if (ev.code === 1000) {
+            setStatus((prev) => (prev === "listening" ? "stopped" : prev));
+            return;
+          }
+          scheduleReconnect(ev.code); // unexpected drop (e.g. 1006) → retry
+        };
       };
 
-      ws.onmessage = (evt) => {
-        let msg: {
-          message_type?: string;
-          text?: string;
-          error?: string;
-          language_code?: string;
-        };
-        try {
-          msg = JSON.parse(evt.data);
-        } catch {
-          console.warn("[scribe] non-JSON message:", evt.data);
+      scheduleReconnect = (code: number) => {
+        if (manualStopRef.current) return;
+        if (reconnectAttemptsRef.current >= MAX_RECONNECTS) {
+          setError(
+            `Transcription connection lost (code ${code}). Press Stop, then Start to resume.`
+          );
+          setStatus("error");
           return;
         }
-        console.log("[scribe] <-", msg.message_type, msg.language_code ?? "", msg.text ?? msg.error ?? "");
-        switch (msg.message_type) {
-          case "partial_transcript":
-            setPartial(msg.text ?? "");
-            break;
-          case "committed_transcript":
-          case "committed_transcript_with_timestamps": {
-            setPartial("");
-            const source = msg.text?.trim();
-            if (!source) break;
-            const id = segId.current++;
-            const lang = (msg.language_code ?? "").toLowerCase();
-            const isEnglish = lang.startsWith("en");
-            // English shows immediately (free); other languages show once
-            // translated (english stays null until then).
-            setCommitted((prev) => [
-              ...prev,
-              { id, role, at: Date.now(), source, english: isEnglish ? source : null },
-            ]);
-            if (!isEnglish) translateSegment(id, source);
-            break;
-          }
-          case "error":
-            setError(msg.error ?? "Transcription error.");
-            break;
-        }
+        const attempt = reconnectAttemptsRef.current++;
+        const delay = Math.min(500 * 2 ** attempt, 8000);
+        setStatus("reconnecting");
+        if (reconnectTimerRef.current !== null) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = window.setTimeout(() => {
+          if (manualStopRef.current) return;
+          // If reopening throws before a socket exists (e.g. the token fetch
+          // fails), there is no close event to retry us — reschedule here.
+          openSocket().catch(() => scheduleReconnect(code));
+        }, delay);
       };
 
-      ws.onerror = (ev) => {
-        console.error("[scribe] websocket error", ev);
-        setError("Transcription connection error.");
-      };
-      ws.onclose = (ev) => {
-        console.warn(
-          `[scribe] websocket closed code=${ev.code} reason=${ev.reason || "(none)"} chunksSent=${chunksSent}`
-        );
-        if (ev.code !== 1000 && ev.code !== 1005) {
-          setError(
-            `Connection closed (code ${ev.code}${ev.reason ? `: ${ev.reason}` : ""}).`
-          );
-        }
-        setStatus((prev) => (prev === "listening" ? "stopped" : prev));
-      };
+      await openSocket(); // initial connection; a failure here → outer catch
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start transcription.");
       setStatus("error");
@@ -363,16 +406,16 @@ export function useMergedTranscription(
     { role: "Patient", text: patient.partial },
   ].filter((p) => p.text);
 
+  const activeStates: ScribeStatus[] = ["connecting", "listening", "reconnecting"];
   const active =
-    doctor.status === "connecting" ||
-    doctor.status === "listening" ||
-    patient.status === "connecting" ||
-    patient.status === "listening";
+    activeStates.includes(doctor.status) || activeStates.includes(patient.status);
 
   // Surface the most informative combined status for the header line.
   const s = [doctor.status, patient.status];
   const status: ScribeStatus = s.includes("connecting")
     ? "connecting"
+    : s.includes("reconnecting")
+    ? "reconnecting"
     : s.includes("listening")
     ? "listening"
     : s.includes("error")

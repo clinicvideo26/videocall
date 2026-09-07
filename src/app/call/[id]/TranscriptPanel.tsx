@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { MergedTranscription, ScribeStatus } from "@/lib/useScribeTranscription";
 import { finalizeConsultation } from "./actions";
 
@@ -8,6 +8,7 @@ const statusLabel: Record<ScribeStatus, string> = {
   idle: "Not started",
   connecting: "Connecting…",
   listening: "Listening",
+  reconnecting: "Reconnecting…",
   stopped: "Stopped",
   error: "Error",
 };
@@ -40,6 +41,58 @@ export default function TranscriptPanel({
   const [saveMsg, setSaveMsg] = useState("");
   const [saved, setSaved] = useState(false);
 
+  // --- Auto-save --------------------------------------------------------------
+  // So a forgotten "End & save" (or a closed tab / dropped call) never loses the
+  // transcript, persist a draft as it grows. This only saves the text — the
+  // summary + "done" status still come from the explicit End & save below.
+  const lastSavedRef = useRef("");
+  const fullTextRef = useRef(fullText);
+  useEffect(() => {
+    fullTextRef.current = fullText;
+  });
+
+  // Debounced periodic save: after 8s of no further speech, flush the latest.
+  useEffect(() => {
+    if (!fullText || fullText === lastSavedRef.current) return;
+    const timer = setTimeout(() => {
+      const text = fullText;
+      lastSavedRef.current = text;
+      fetch(`/api/consultation/${consultationId}/autosave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        keepalive: true,
+      }).catch(() => {
+        lastSavedRef.current = ""; // let the next change retry
+      });
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [fullText, consultationId]);
+
+  // Best-effort save when the tab is hidden/closed or this view unmounts, using
+  // sendBeacon so it still goes out during page teardown.
+  useEffect(() => {
+    const flush = () => {
+      const text = fullTextRef.current;
+      if (!text || text === lastSavedRef.current) return;
+      lastSavedRef.current = text;
+      const blob = new Blob([JSON.stringify({ text })], {
+        type: "application/json",
+      });
+      navigator.sendBeacon(`/api/consultation/${consultationId}/autosave`, blob);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      flush();
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [consultationId]);
+
   function endAndSave() {
     setSaveMsg("");
     if (active) stop();
@@ -71,7 +124,11 @@ export default function TranscriptPanel({
         </button>
       </div>
 
-      <p className="text-xs text-gray-400">
+      <p
+        className={`text-xs ${
+          status === "reconnecting" ? "text-amber-600" : "text-gray-400"
+        }`}
+      >
         {statusLabel[status]}
         {active ? (
           <span className="text-gray-400">
