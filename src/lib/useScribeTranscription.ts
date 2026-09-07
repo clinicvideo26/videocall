@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Client for ElevenLabs Scribe v2 Realtime speech-to-text.
 // Protocol verified against:
@@ -23,7 +23,15 @@ const WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 // `source` is the spoken-language text from Scribe; `english` is the (possibly
 // translated) text shown and stored. For English speech english === source; for
 // other languages english is filled in asynchronously by the translate call.
-export type TranscriptSegment = { id: number; source: string; english: string | null };
+// `role` labels the speaker (e.g. "Doctor" / "Patient") and `at` is the commit
+// time, used to interleave segments from two concurrent Scribe sessions.
+export type TranscriptSegment = {
+  id: number;
+  role: string;
+  at: number;
+  source: string;
+  english: string | null;
+};
 export type ScribeStatus =
   | "idle"
   | "connecting"
@@ -46,11 +54,30 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
   return btoa(binary);
 }
 
-export function useScribeTranscription(consultationId: string) {
+// `role` labels this session's speaker. `getStream` supplies the audio source:
+// when provided it returns a MediaStream (e.g. a remote Daily participant's
+// audio track) to transcribe; when omitted the hook captures the local mic via
+// getUserMedia (the original single-device behaviour, unchanged).
+export type ScribeOptions = {
+  role?: string;
+  getStream?: () => MediaStream | null | Promise<MediaStream | null>;
+};
+
+export function useScribeTranscription(
+  consultationId: string,
+  opts: ScribeOptions = {}
+) {
+  const { role = "Doctor", getStream } = opts;
   const [status, setStatus] = useState<ScribeStatus>("idle");
   const [error, setError] = useState("");
   const [partial, setPartial] = useState("");
   const [committed, setCommitted] = useState<TranscriptSegment[]>([]);
+
+  // Keep the latest getStream in a ref so start() stays a stable callback.
+  const getStreamRef = useRef(getStream);
+  useEffect(() => {
+    getStreamRef.current = getStream;
+  });
 
   const wsRef = useRef<WebSocket | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
@@ -58,13 +85,19 @@ export function useScribeTranscription(consultationId: string) {
   const nodeRef = useRef<AudioWorkletNode | null>(null);
   const queueRef = useRef<string[]>([]); // audio captured before the socket opens
   const segId = useRef(0);
+  // True only when we created the stream (getUserMedia). A borrowed stream from
+  // the Daily call must NOT have its tracks stopped here — that would cut the
+  // call's audio for everyone.
+  const ownsStreamRef = useRef(false);
 
   const stop = useCallback(() => {
     if (nodeRef.current) {
       nodeRef.current.port.onmessage = null;
       nodeRef.current.disconnect();
     }
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (ownsStreamRef.current) {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    }
     ctxRef.current?.close().catch(() => {});
     if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) {
       wsRef.current.close();
@@ -115,13 +148,24 @@ export function useScribeTranscription(consultationId: string) {
       }
       const { token } = (await res.json()) as { token: string };
 
-      // 2. Microphone → 16 kHz capture on an AudioWorklet (a dedicated audio
+      // 2. Audio source → 16 kHz capture on an AudioWorklet (a dedicated audio
       // thread), so UI re-renders can't starve it and drop audio. Capture
       // starts now and is buffered until the socket opens — no opening words
-      // are lost.
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
+      // are lost. The source is either a borrowed stream (e.g. the remote Daily
+      // participant's audio track) or the local mic via getUserMedia.
+      let stream: MediaStream | null;
+      if (getStreamRef.current) {
+        stream = await getStreamRef.current();
+        ownsStreamRef.current = false;
+        if (!stream || stream.getAudioTracks().length === 0) {
+          throw new Error(`No ${role} audio available yet.`);
+        }
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        ownsStreamRef.current = true;
+      }
       streamRef.current = stream;
       const ctx = new AudioContext({ sampleRate: 16000 });
       ctxRef.current = ctx;
@@ -206,7 +250,7 @@ export function useScribeTranscription(consultationId: string) {
             // translated (english stays null until then).
             setCommitted((prev) => [
               ...prev,
-              { id, source, english: isEnglish ? source : null },
+              { id, role, at: Date.now(), source, english: isEnglish ? source : null },
             ]);
             if (!isEnglish) translateSegment(id, source);
             break;
@@ -237,10 +281,117 @@ export function useScribeTranscription(consultationId: string) {
       setStatus("error");
       stop();
     }
-  }, [consultationId, stop, translateSegment]);
+  }, [consultationId, role, stop, translateSegment]);
 
   // English text shown/stored: english when available, else the source (so a
   // failed/pending translation still preserves the words).
   const fullText = committed.map((c) => c.english ?? c.source).join(" ");
   return { status, error, partial, committed, fullText, start, stop };
+}
+
+export type Partial = { role: string; text: string };
+export type MergedTranscription = {
+  status: ScribeStatus;
+  error: string;
+  partials: Partial[];
+  committed: TranscriptSegment[];
+  fullText: string;
+  active: boolean;
+  patientAudioReady: boolean;
+  start: () => void;
+  stop: () => void;
+};
+
+// Runs two Scribe sessions on the doctor's device — the local mic ("Doctor")
+// and the remote participant's audio track ("Patient") — and merges them into a
+// single speaker-labeled, time-ordered transcript (Step 6b Stage 2). The Doctor
+// session is the original local-mic path, unchanged; the Patient session reads
+// the borrowed Daily audio stream and only runs once that track exists.
+export function useMergedTranscription(
+  consultationId: string,
+  opts: { getRemoteStream: () => MediaStream | null; patientAudioReady: boolean }
+): MergedTranscription {
+  const { getRemoteStream, patientAudioReady } = opts;
+
+  const doctor = useScribeTranscription(consultationId, { role: "Doctor" });
+  const patient = useScribeTranscription(consultationId, {
+    role: "Patient",
+    getStream: getRemoteStream,
+  });
+
+  const runningRef = useRef(false);
+  const patientStart = patient.start;
+  const patientStatus = patient.status;
+
+  const start = useCallback(() => {
+    runningRef.current = true;
+    doctor.start();
+    if (patientAudioReady) patient.start();
+  }, [doctor, patient, patientAudioReady]);
+
+  const stop = useCallback(() => {
+    runningRef.current = false;
+    doctor.stop();
+    patient.stop();
+  }, [doctor, patient]);
+
+  // If the patient joins (or their audio appears) after the doctor has already
+  // started transcription, bring the Patient session up too. runningRef gates
+  // this so a normal stop() doesn't immediately restart it.
+  useEffect(() => {
+    if (
+      runningRef.current &&
+      patientAudioReady &&
+      (patientStatus === "idle" || patientStatus === "stopped")
+    ) {
+      patientStart();
+    }
+  }, [patientAudioReady, patientStatus, patientStart]);
+
+  const committed = useMemo(
+    () =>
+      [...doctor.committed, ...patient.committed].sort((a, b) => a.at - b.at),
+    [doctor.committed, patient.committed]
+  );
+
+  const fullText = committed
+    .map((c) => `${c.role}: ${c.english ?? c.source}`)
+    .join("\n");
+
+  const partials: Partial[] = [
+    { role: "Doctor", text: doctor.partial },
+    { role: "Patient", text: patient.partial },
+  ].filter((p) => p.text);
+
+  const active =
+    doctor.status === "connecting" ||
+    doctor.status === "listening" ||
+    patient.status === "connecting" ||
+    patient.status === "listening";
+
+  // Surface the most informative combined status for the header line.
+  const s = [doctor.status, patient.status];
+  const status: ScribeStatus = s.includes("connecting")
+    ? "connecting"
+    : s.includes("listening")
+    ? "listening"
+    : s.includes("error")
+    ? "error"
+    : s.includes("stopped")
+    ? "stopped"
+    : "idle";
+
+  const error = doctor.error || patient.error;
+
+  return {
+    status,
+    error,
+    partials,
+    committed,
+    fullText,
+    active,
+    patientAudioReady,
+    start,
+    stop,
+  };
 }

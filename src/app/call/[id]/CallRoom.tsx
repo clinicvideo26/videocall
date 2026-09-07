@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import DailyIframe, { type DailyCall } from "@daily-co/daily-js";
+import { useMergedTranscription } from "@/lib/useScribeTranscription";
+import TranscriptPanel from "./TranscriptPanel";
 
 type Tile = {
   sessionId: string;
@@ -37,20 +39,41 @@ function VideoTile({ tile }: { tile: Tile }) {
 
 // Custom Daily call (replaces the prebuilt iframe) so the doctor's device can
 // access each participant's audio track for per-speaker transcription (Stage 2).
-export default function CallRoom({ roomUrl }: { roomUrl: string }) {
+// When `showTranscript`, the doctor also runs two Scribe sessions here — local
+// mic + the remote participant's audio track — merged into one labeled feed.
+export default function CallRoom({
+  roomUrl,
+  consultationId,
+  showTranscript = false,
+}: {
+  roomUrl: string;
+  consultationId: string;
+  showTranscript?: boolean;
+}) {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [status, setStatus] = useState<CallStatus>("joining");
   const [error, setError] = useState("");
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [patientAudioReady, setPatientAudioReady] = useState(false);
   const callRef = useRef<DailyCall | null>(null);
   const streams = useRef<Map<string, MediaStream>>(new Map());
+  // Audio-only stream carrying the remote (patient) track, fed to the Patient
+  // Scribe session. Kept separate from the tile streams so transcription owns a
+  // stable handle regardless of video track churn.
+  const remoteAudioRef = useRef<MediaStream | null>(null);
+
+  const transcription = useMergedTranscription(consultationId, {
+    getRemoteStream: () => remoteAudioRef.current,
+    patientAudioReady,
+  });
 
   useEffect(() => {
     // In dev, StrictMode double-mounts; guard against a duplicate call object.
     if (callRef.current) return;
     const call = DailyIframe.createCallObject();
     callRef.current = call;
+    const sessionStreams = streams.current; // stable handle for cleanup
 
     const syncStream = (sessionId: string, tracks: MediaStreamTrack[]) => {
       let s = streams.current.get(sessionId);
@@ -65,15 +88,38 @@ export default function CallRoom({ roomUrl }: { roomUrl: string }) {
       return s;
     };
 
+    // Keep remoteAudioRef holding exactly the first remote participant's audio
+    // track, and flag readiness so the Patient Scribe session can (re)start.
+    const syncRemoteAudio = (track: MediaStreamTrack | null) => {
+      if (track) {
+        let s = remoteAudioRef.current;
+        if (!s) {
+          s = new MediaStream();
+          remoteAudioRef.current = s;
+        }
+        if (!s.getAudioTracks().some((t) => t.id === track.id)) {
+          s.getAudioTracks().forEach((t) => s!.removeTrack(t));
+          s.addTrack(track);
+        }
+      } else if (remoteAudioRef.current) {
+        remoteAudioRef.current
+          .getTracks()
+          .forEach((t) => remoteAudioRef.current!.removeTrack(t));
+      }
+      setPatientAudioReady(!!track);
+    };
+
     const rebuild = () => {
       const participants = call.participants();
       const next: Tile[] = [];
+      let remoteAudio: MediaStreamTrack | null = null;
       for (const p of Object.values(participants)) {
         const tracks: MediaStreamTrack[] = [];
         const v = p.tracks?.video?.persistentTrack;
         const a = p.tracks?.audio?.persistentTrack;
         if (v) tracks.push(v);
         if (a) tracks.push(a);
+        if (!p.local && a && !remoteAudio) remoteAudio = a;
         next.push({
           sessionId: p.session_id,
           label: p.local ? "You (doctor)" : p.user_name || "Patient",
@@ -86,6 +132,7 @@ export default function CallRoom({ roomUrl }: { roomUrl: string }) {
       for (const key of streams.current.keys()) {
         if (!live.has(key)) streams.current.delete(key);
       }
+      syncRemoteAudio(remoteAudio);
       setTiles(next);
     };
 
@@ -112,7 +159,8 @@ export default function CallRoom({ roomUrl }: { roomUrl: string }) {
     return () => {
       call.destroy().catch(() => {});
       callRef.current = null;
-      streams.current.clear();
+      sessionStreams.clear();
+      remoteAudioRef.current = null;
     };
   }, [roomUrl]);
 
@@ -132,38 +180,47 @@ export default function CallRoom({ roomUrl }: { roomUrl: string }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      {status === "error" ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
-      {status === "joining" ? (
-        <p className="text-sm text-gray-400">Joining the call…</p>
-      ) : null}
+    <div className="flex h-full flex-col gap-3 md:flex-row">
+      <div className="flex flex-1 flex-col gap-3">
+        {status === "error" ? (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        ) : null}
+        {status === "joining" ? (
+          <p className="text-sm text-gray-400">Joining the call…</p>
+        ) : null}
 
-      <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-        {tiles.map((t) => (
-          <VideoTile key={t.sessionId} tile={t} />
-        ))}
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+          {tiles.map((t) => (
+            <VideoTile key={t.sessionId} tile={t} />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleMic}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {micOn ? "Mute mic" : "Unmute mic"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleCam}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {camOn ? "Turn camera off" : "Turn camera on"}
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={toggleMic}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
-        >
-          {micOn ? "Mute mic" : "Unmute mic"}
-        </button>
-        <button
-          type="button"
-          onClick={toggleCam}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
-        >
-          {camOn ? "Turn camera off" : "Turn camera on"}
-        </button>
-      </div>
+      {showTranscript ? (
+        <TranscriptPanel
+          consultationId={consultationId}
+          transcription={transcription}
+        />
+      ) : null}
     </div>
   );
 }

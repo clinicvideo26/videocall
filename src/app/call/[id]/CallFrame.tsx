@@ -1,9 +1,8 @@
-import TranscriptPanel from "./TranscriptPanel";
 import CallRoom from "./CallRoom";
 
 // Plain (no "use client") component: safe to render from both the server page
-// and the client-side consent gate. Embeds the Daily room and shows the live
-// transcript alongside it.
+// and the client-side consent gate. CallRoom owns the Daily call and, for the
+// doctor, the live per-speaker transcript alongside it.
 export default function CallFrame({
   id,
   name,
@@ -20,15 +19,12 @@ export default function CallFrame({
       <header className="border-b border-gray-200 px-4 py-3">
         <h1 className="text-sm font-medium">Consultation — {name}</h1>
       </header>
-      <div className="flex flex-1 flex-col md:flex-row">
-        <div className="flex-1 p-4">
-          <CallRoom roomUrl={roomUrl} />
-        </div>
-        {showTranscript ? (
-          <div className="border-t border-gray-200 p-4 md:border-l md:border-t-0">
-            <TranscriptPanel consultationId={id} />
-          </div>
-        ) : null}
+      <div className="flex-1 p-4">
+        <CallRoom
+          roomUrl={roomUrl}
+          consultationId={id}
+          showTranscript={showTranscript}
+        />
       </div>
     </main>
   );

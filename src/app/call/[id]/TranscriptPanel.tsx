@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useScribeTranscription, type ScribeStatus } from "@/lib/useScribeTranscription";
+import type { MergedTranscription, ScribeStatus } from "@/lib/useScribeTranscription";
 import { finalizeConsultation } from "./actions";
 
 const statusLabel: Record<ScribeStatus, string> = {
@@ -12,21 +12,33 @@ const statusLabel: Record<ScribeStatus, string> = {
   error: "Error",
 };
 
-// Doctor-facing live transcript. The doctor watches this but does not edit it
-// (spec 3.3); if something is wrong they ask the patient to repeat.
+// Doctor-facing live transcript. Both speakers are transcribed (local mic +
+// remote patient audio) and shown with speaker labels (Step 6b Stage 2). The
+// doctor watches but does not edit it (spec 3.3); if something is wrong they ask
+// the patient to repeat. The transcription state is owned by CallRoom (which
+// holds the Daily call) and passed in here.
 export default function TranscriptPanel({
   consultationId,
+  transcription,
 }: {
   consultationId: string;
+  transcription: MergedTranscription;
 }) {
-  const { status, error, partial, committed, fullText, start, stop } =
-    useScribeTranscription(consultationId);
+  const {
+    status,
+    error,
+    partials,
+    committed,
+    fullText,
+    active,
+    patientAudioReady,
+    start,
+    stop,
+  } = transcription;
 
   const [saving, startSaving] = useTransition();
   const [saveMsg, setSaveMsg] = useState("");
   const [saved, setSaved] = useState(false);
-
-  const active = status === "connecting" || status === "listening";
 
   function endAndSave() {
     setSaveMsg("");
@@ -59,24 +71,40 @@ export default function TranscriptPanel({
         </button>
       </div>
 
-      <p className="text-xs text-gray-400">{statusLabel[status]}</p>
+      <p className="text-xs text-gray-400">
+        {statusLabel[status]}
+        {active ? (
+          <span className="text-gray-400">
+            {" "}
+            · Patient audio {patientAudioReady ? "connected" : "waiting…"}
+          </span>
+        ) : null}
+      </p>
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
       <div className="min-h-40 flex-1 overflow-y-auto rounded-md border border-gray-200 p-3 text-sm leading-relaxed">
-        {committed.length === 0 && !partial ? (
-          <p className="text-gray-400">Transcript will appear here as people speak…</p>
+        {committed.length === 0 && partials.length === 0 ? (
+          <p className="text-gray-400">
+            Transcript will appear here as people speak…
+          </p>
         ) : null}
-        {committed.map((seg) =>
-          seg.english ? (
-            <span key={seg.id}>{seg.english} </span>
-          ) : (
-            // non-English segment still being translated
-            <span key={seg.id} className="italic text-gray-400">
-              {seg.source}{" "}
-            </span>
-          )
-        )}
-        {partial ? <span className="text-gray-400">{partial}</span> : null}
+        {committed.map((seg) => (
+          <p key={`${seg.role}-${seg.id}`} className="mb-1">
+            <span className="font-medium text-gray-500">{seg.role}: </span>
+            {seg.english ? (
+              <span>{seg.english}</span>
+            ) : (
+              // non-English segment still being translated
+              <span className="italic text-gray-400">{seg.source}</span>
+            )}
+          </p>
+        ))}
+        {partials.map((p) => (
+          <p key={p.role} className="mb-1 text-gray-400">
+            <span className="font-medium">{p.role}: </span>
+            {p.text}
+          </p>
+        ))}
       </div>
 
       <button
@@ -88,11 +116,6 @@ export default function TranscriptPanel({
         {saving ? "Saving…" : "End & save consultation"}
       </button>
       {saveMsg ? <p className="text-xs text-green-700">{saveMsg}</p> : null}
-
-      <p className="text-[11px] leading-snug text-gray-400">
-        Note: this currently transcribes only this device&apos;s microphone.
-        Transcribing both participants needs the custom call (Step 6b).
-      </p>
     </aside>
   );
 }
