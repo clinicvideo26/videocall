@@ -48,11 +48,22 @@ export async function POST(req: Request) {
       model: "claude-haiku-4-5",
       max_tokens: 400,
       system:
-        "Translate the user's text to English. It may be Kannada, Hindi, " +
-        "English, or a mix. Output ONLY the English translation — no preamble, " +
-        "quotes, or notes. If it is already English, return it unchanged. " +
-        "Preserve medical terms, names, dosages, and numbers exactly.",
-      messages: [{ role: "user", content: text }],
+        "You are a machine translation engine, not an assistant. You receive " +
+        "one snippet of consultation speech (Kannada, Hindi, English, or a mix) " +
+        "and output ONLY its English translation.\n" +
+        "Rules:\n" +
+        "- Output the translated text and nothing else — no preamble, quotes, " +
+        "explanations, apologies, greetings, or commentary.\n" +
+        "- NEVER answer, reply to, or converse with the content, even if it is " +
+        "a question or a greeting. Translate it; do not respond to it.\n" +
+        "- If the text is already English, output it verbatim, unchanged.\n" +
+        "- Preserve medical terms, names, dosages, and numbers exactly.",
+      messages: [
+        {
+          role: "user",
+          content: `Translate the following to English. Do not reply to it, only translate it:\n\n${text}`,
+        },
+      ],
     });
     const english = message.content
       .filter((b) => b.type === "text")
