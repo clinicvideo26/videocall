@@ -56,7 +56,9 @@ export default function CallRoom({
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [patientAudioReady, setPatientAudioReady] = useState(false);
+  const [videoReduced, setVideoReduced] = useState(false);
   const callRef = useRef<DailyCall | null>(null);
+  const sendQualityRef = useRef<"low" | "medium">("medium");
   const streams = useRef<Map<string, MediaStream>>(new Map());
   // Audio-only stream carrying the remote (patient) track, fed to the Patient
   // Scribe session. Kept separate from the tile streams so transcription owns a
@@ -151,6 +153,20 @@ export default function CallRoom({
       setStatus("error");
     });
 
+    // The doctor's device runs the 2-way video plus two Scribe pipelines, which
+    // can overload weaker devices ("CPU is busy"). When Daily reports high CPU,
+    // drop our outgoing video quality; restore it once the CPU recovers. Audio
+    // (the transcript) is never touched.
+    const applyQuality = (q: "low" | "medium") => {
+      if (sendQualityRef.current === q) return;
+      sendQualityRef.current = q;
+      call.updateSendSettings({ video: { maxQuality: q } }).catch(() => {});
+      setVideoReduced(q === "low");
+    };
+    call.on("cpu-load-change", (ev) => {
+      applyQuality(ev?.cpuLoadState === "high" ? "low" : "medium");
+    });
+
     call.join({ url: roomUrl }).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : "Could not join the call.");
       setStatus("error");
@@ -212,6 +228,11 @@ export default function CallRoom({
           >
             {camOn ? "Turn camera off" : "Turn camera on"}
           </button>
+          {videoReduced ? (
+            <span className="text-xs text-amber-600">
+              Video quality lowered to keep the call smooth.
+            </span>
+          ) : null}
         </div>
       </div>
 
