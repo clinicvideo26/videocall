@@ -100,11 +100,18 @@ export default function TranscriptPanel({
       const result = await finalizeConsultation(consultationId, fullText);
       if (result.ok) {
         setSaved(true);
-        setSaveMsg(
+        const bits: string[] = [
           result.summarized
-            ? "Saved. Summary generated — view it in the Transcripts tab."
-            : result.error ?? "Transcript saved."
-        );
+            ? "Saved with summary."
+            : result.error ?? "Transcript saved.",
+        ];
+        if (result.whatsapp === "sent") {
+          bits.push("PDF sent to the clinic's WhatsApp.");
+        } else if (result.whatsapp === "failed") {
+          bits.push("WhatsApp delivery failed — the PDF is in the Transcripts tab.");
+        }
+        bits.push("View it in the Transcripts tab.");
+        setSaveMsg(bits.join(" "));
       } else {
         setSaveMsg(result.error ?? "Could not save.");
       }
