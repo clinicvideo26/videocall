@@ -142,16 +142,18 @@ function toRecipient(phone: string): string {
 }
 
 /**
- * Send the patient their appointment time + join link via the appointment
- * template. The template's BODY must take three variables, in this order:
- *   {{1}} patient name   {{2}} appointment time   {{3}} join link
+ * Send the patient their appointment via the appointment template. The template
+ * must be:
+ *   BODY with two variables:  {{1}} patient name   {{2}} appointment time
+ *   a dynamic URL BUTTON whose URL is  <APP>/call/{{1}}  — we pass the
+ *   consultation id as that button suffix, so the button opens the call.
  * Throws the Meta error on failure so the caller can log it (best-effort).
  */
 export async function sendPatientAppointment(opts: {
   patientPhone: string;
   name: string;
   timeLabel: string;
-  link: string;
+  consultationId: string;
 }): Promise<void> {
   const cfg = appointmentWhatsAppConfig();
   if (!cfg) throw new Error("Appointment WhatsApp template is not configured.");
@@ -169,8 +171,15 @@ export async function sendPatientAppointment(opts: {
           parameters: [
             { type: "text", text: opts.name || "there" },
             { type: "text", text: opts.timeLabel },
-            { type: "text", text: opts.link },
           ],
+        },
+        {
+          // Dynamic URL button: the parameter is the SUFFIX appended to the
+          // template's fixed base URL (.../call/), i.e. the consultation id.
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: opts.consultationId }],
         },
       ],
     },
