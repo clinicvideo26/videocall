@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doctor queue</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h3l2 5 4-12 2 7h4" />
+          </svg>
+        </span>
+        <span class="title">Doctor queue</span>
+      </div>
+      <button id="gear" class="icon-btn" title="Settings" hidden>⚙</button>
+    </header>
+
+    <!-- Login view -->
+    <section id="login" class="view" hidden>
+      <p class="lead">Sign in to see your appointments.</p>
+
+      <label class="label" for="phone">Phone number</label>
+      <input id="phone" class="field" type="tel" inputmode="tel" placeholder="9876543210" />
+
+      <!-- OTP step 2 -->
+      <div id="codeRow" hidden>
+        <p id="devCode" class="hint" hidden></p>
+        <label class="label" for="code">Verification code</label>
+        <input id="code" class="field" inputmode="numeric" autocomplete="one-time-code" />
+      </div>
+
+      <!-- PIN mode -->
+      <div id="pinRow" hidden>
+        <label class="label" for="pin">PIN</label>
+        <input id="pin" class="field" type="password" inputmode="numeric" />
+      </div>
+
+      <button id="primaryBtn" class="btn btn-primary">Send code</button>
+      <button id="modeToggle" class="linkbtn">Use a PIN instead</button>
+      <p id="loginErr" class="err" role="alert" hidden></p>
+    </section>
+
+    <!-- Queue view -->
+    <section id="queue" class="view" hidden>
+      <div class="queue-head">
+        <span id="who" class="who"></span>
+        <button id="signout" class="linkbtn">Sign out</button>
+      </div>
+      <p id="queueMeta" class="hint"></p>
+      <ul id="list" class="list"></ul>
+      <p id="empty" class="empty" hidden>No appointments due right now.</p>
+    </section>
+
+    <!-- Settings view -->
+    <section id="settings" class="view" hidden>
+      <label class="label" for="apiBase">Server URL</label>
+      <input id="apiBase" class="field" type="url" />
+      <p class="hint">Where the clinic app runs. Change only if testing locally.</p>
+      <button id="saveApi" class="btn btn-primary">Save</button>
+      <button id="closeSettings" class="linkbtn">Back</button>
+    </section>
+
+    <script src="panel.js"></script>
+  </body>
+</html>
