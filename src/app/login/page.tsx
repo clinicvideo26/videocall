@@ -3,8 +3,9 @@ import { getSession } from "@/lib/auth";
 import LoginForm from "./LoginForm";
 
 export default async function LoginPage() {
-  // Already signed in → skip the form.
-  if (await getSession()) redirect("/dashboard");
+  // Already signed in → skip the form (admins land on the admin screen).
+  const session = await getSession();
+  if (session) redirect(session.role === "admin" ? "/admin" : "/dashboard");
 
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
