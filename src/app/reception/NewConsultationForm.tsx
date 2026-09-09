@@ -116,9 +116,20 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
           </p>
           {state.mode === "video" && state.link ? (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-500">
-                Patient link — send this to the patient:
-              </span>
+              {state.whatsapp === "sent" ? (
+                <span className="text-xs font-medium text-teal-700">
+                  ✓ Sent to the patient on WhatsApp. Link (backup):
+                </span>
+              ) : state.whatsapp === "failed" ? (
+                <span className="text-xs font-medium text-amber-700">
+                  ⚠ Couldn&apos;t WhatsApp the patient — copy the link and send it
+                  manually:
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-slate-500">
+                  Patient link — send this to the patient:
+                </span>
+              )}
               <div className="flex items-center gap-2">
                 <code className="flex-1 break-all rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
                   {state.link}

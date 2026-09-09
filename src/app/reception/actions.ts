@@ -7,7 +7,11 @@ import { prisma } from "@/lib/prisma";
 import { createDailyRoom } from "@/lib/daily";
 import { generateConsultationId } from "@/lib/ids";
 import { normalizePhone } from "@/lib/otp";
-import { istInputToDate } from "@/lib/time";
+import { istInputToDate, formatIst } from "@/lib/time";
+import {
+  sendPatientAppointment,
+  isAppointmentWhatsAppConfigured,
+} from "@/lib/whatsapp";
 
 export type ReceptionCreateState =
   | { status: "idle" }
@@ -18,6 +22,7 @@ export type ReceptionCreateState =
       name: string;
       mode: "audio" | "video";
       link: string | null;
+      whatsapp?: "sent" | "failed" | "skipped";
     };
 
 async function shareLink(id: string): Promise<string> {
@@ -111,12 +116,34 @@ export async function createReceptionConsultation(
   }
 
   revalidatePath("/reception");
+
+  const link = mode === "video" ? await shareLink(id) : null;
+
+  // Best-effort: WhatsApp the patient their appointment time + link. Never
+  // blocks registration — reception can always copy the link shown on screen.
+  let whatsapp: "sent" | "failed" | "skipped" = "skipped";
+  if (link && scheduledAt && isAppointmentWhatsAppConfigured()) {
+    try {
+      await sendPatientAppointment({
+        patientPhone,
+        name,
+        timeLabel: formatIst(scheduledAt),
+        link,
+      });
+      whatsapp = "sent";
+    } catch (e) {
+      console.error("[whatsapp] patient appointment send failed:", e);
+      whatsapp = "failed";
+    }
+  }
+
   return {
     status: "success",
     id,
     name: name || patientPhone,
     mode,
-    link: mode === "video" ? await shareLink(id) : null,
+    link,
+    whatsapp,
   };
 }
 

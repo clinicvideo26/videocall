@@ -104,6 +104,96 @@ async function sendDocumentTemplate(
   }
 }
 
+// --- Patient appointment message (video flow #4) ----------------------------
+// A second, separate template that goes to the PATIENT (not the clinic) with
+// the appointment time + join link. Reuses the same WhatsApp number/token as
+// the PDF flow; only the template name (and optional language) differ.
+
+const DEFAULT_COUNTRY_CODE = process.env.WHATSAPP_DEFAULT_COUNTRY_CODE || "91";
+
+type AppointmentConfig = {
+  phoneNumberId: string;
+  token: string;
+  template: string;
+  lang: string;
+};
+
+export function appointmentWhatsAppConfig(): AppointmentConfig | null {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const template = process.env.WHATSAPP_APPOINTMENT_TEMPLATE_NAME;
+  const lang =
+    process.env.WHATSAPP_APPOINTMENT_TEMPLATE_LANG ||
+    process.env.WHATSAPP_TEMPLATE_LANG ||
+    "en_US";
+  if (!phoneNumberId || !token || !template) return null;
+  return { phoneNumberId, token, template, lang };
+}
+
+export function isAppointmentWhatsAppConfigured(): boolean {
+  return appointmentWhatsAppConfig() !== null;
+}
+
+/** WhatsApp needs a full international number. A bare 10-digit Indian number
+ *  gets the default country code prepended. */
+function toRecipient(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length === 10 ? `${DEFAULT_COUNTRY_CODE}${digits}` : digits;
+}
+
+/**
+ * Send the patient their appointment time + join link via the appointment
+ * template. The template's BODY must take three variables, in this order:
+ *   {{1}} patient name   {{2}} appointment time   {{3}} join link
+ * Throws the Meta error on failure so the caller can log it (best-effort).
+ */
+export async function sendPatientAppointment(opts: {
+  patientPhone: string;
+  name: string;
+  timeLabel: string;
+  link: string;
+}): Promise<void> {
+  const cfg = appointmentWhatsAppConfig();
+  if (!cfg) throw new Error("Appointment WhatsApp template is not configured.");
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: toRecipient(opts.patientPhone),
+    type: "template",
+    template: {
+      name: cfg.template,
+      language: { code: cfg.lang },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: opts.name || "there" },
+            { type: "text", text: opts.timeLabel },
+            { type: "text", text: opts.link },
+          ],
+        },
+      ],
+    },
+  };
+
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(
+      `WhatsApp appointment send failed (${res.status}): ${JSON.stringify(
+        data.error ?? data
+      )}`
+    );
+  }
+}
+
 // Upload + send. Throws (with the Meta error) on any failure so the caller can
 // log it; returns nothing on success.
 export async function sendWhatsAppPdf(
