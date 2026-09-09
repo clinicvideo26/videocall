@@ -27,6 +27,12 @@ export default async function DashboardLayout({
             {session.name}
             <span className="ml-1 text-gray-400">({session.role})</span>
           </span>
+          <Link
+            href="/pin"
+            className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100"
+          >
+            Set PIN
+          </Link>
           <form action={logout}>
             <button
               type="submit"

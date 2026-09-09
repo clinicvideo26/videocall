@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { createSession } from "@/lib/auth";
+import { createSession, verifySecret } from "@/lib/auth";
 import { createOtp, verifyOtp, normalizePhone } from "@/lib/otp";
 
 // Step 1: request an OTP. Only known staff (no self-registration, v2 §3) get a
@@ -51,6 +51,34 @@ export async function verifyAndLogin(
 
   const user = await prisma.user.findUnique({ where: { phone } });
   if (!user) return { error: "Account not found." };
+
+  await createSession({
+    userId: user.id,
+    clinicId: user.clinicId,
+    role: user.role,
+    phone: user.phone,
+    name: user.name,
+  });
+
+  redirect(user.role === "admin" ? "/admin" : "/dashboard");
+}
+
+// Alternative to OTP for quick re-entry on shared machines (v2 §3): phone + PIN.
+// Only works once the user has set a PIN from their account screen.
+export async function pinLogin(
+  _prev: VerifyState,
+  formData: FormData
+): Promise<VerifyState> {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const pin = String(formData.get("pin") ?? "");
+  if (phone.length < 10 || pin.length < 4) {
+    return { error: "Enter your phone number and PIN." };
+  }
+
+  const user = await prisma.user.findUnique({ where: { phone } });
+  if (!user || !verifySecret(pin, user.pinHash)) {
+    return { error: "Incorrect phone or PIN." };
+  }
 
   await createSession({
     userId: user.id,
