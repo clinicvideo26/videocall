@@ -3,14 +3,23 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-// Minimal single-account auth for the clinic staff login (spec 3.1).
-// No external auth service and no extra dependencies — password hashing and
-// session signing both use Node's built-in crypto.
+// Auth for clinic staff (v2 §3): login is by phone + OTP, with three roles.
+// Sessions are long-lived — the spec wants login to be effectively one-time.
+// No external auth service; session signing and PIN hashing use Node crypto.
 
 const COOKIE_NAME = "clinic_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 180; // 180 days ("effectively never again")
 
-export type Session = { user: string; exp: number };
+export type Role = "admin" | "reception" | "doctor";
+
+export type Session = {
+  userId: string;
+  clinicId: string;
+  role: Role;
+  phone: string;
+  name: string;
+  exp: number;
+};
 
 function getSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -22,10 +31,17 @@ function getSecret(): string {
   return secret;
 }
 
-// --- Password (stored as "scrypt:<saltHex>:<hashHex>") -----------------------
+// --- scrypt hashing (stored as "scrypt:<saltHex>:<hashHex>") ------------------
+// Used for the quick-re-entry PIN. Generic so it can hash any short secret.
 
-/** Verify a plaintext password against a stored scrypt hash, in constant time. */
-export function verifyPassword(password: string, stored: string | undefined): boolean {
+export function hashSecret(secret: string): string {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(secret, salt, 32);
+  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+/** Verify a plaintext secret against a stored scrypt hash, in constant time. */
+export function verifySecret(secret: string, stored: string | null | undefined): boolean {
   if (!stored) return false;
   const parts = stored.split(":");
   if (parts.length !== 3 || parts[0] !== "scrypt") return false;
@@ -36,7 +52,7 @@ export function verifyPassword(password: string, stored: string | undefined): bo
   } catch {
     return false;
   }
-  const actual = crypto.scryptSync(password, Buffer.from(saltHex, "hex"), expected.length);
+  const actual = crypto.scryptSync(secret, Buffer.from(saltHex, "hex"), expected.length);
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
@@ -46,9 +62,9 @@ function sign(data: string): string {
   return crypto.createHmac("sha256", getSecret()).update(data).digest("base64url");
 }
 
-function createToken(user: string): string {
+function createToken(session: Omit<Session, "exp">): string {
   const payload: Session = {
-    user,
+    ...session,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
   };
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -74,9 +90,9 @@ function verifyToken(token: string | undefined): Session | null {
 
 // --- Public helpers used by pages / actions ----------------------------------
 
-export async function createSession(user: string): Promise<void> {
+export async function createSession(session: Omit<Session, "exp">): Promise<void> {
   const store = await cookies();
-  store.set(COOKIE_NAME, createToken(user), {
+  store.set(COOKIE_NAME, createToken(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -99,5 +115,12 @@ export async function getSession(): Promise<Session | null> {
 export async function requireSession(): Promise<Session> {
   const session = await getSession();
   if (!session) redirect("/login");
+  return session;
+}
+
+/** Require one of the given roles; redirect home if the role doesn't match. */
+export async function requireRole(...roles: Role[]): Promise<Session> {
+  const session = await requireSession();
+  if (!roles.includes(session.role)) redirect("/dashboard");
   return session;
 }

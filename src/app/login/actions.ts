@@ -1,26 +1,64 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSession, verifyPassword } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { createSession } from "@/lib/auth";
+import { createOtp, verifyOtp, normalizePhone } from "@/lib/otp";
 
-export type LoginState = { error: string };
+// Step 1: request an OTP. Only known staff (no self-registration, v2 §3) get a
+// code. `devCode` is populated in dev so the login screen can show it.
+export type RequestState = {
+  sent: boolean;
+  phone: string;
+  error?: string;
+  devCode?: string;
+};
 
-export async function login(
-  _prev: LoginState,
+export async function requestOtp(
+  _prev: RequestState,
   formData: FormData
-): Promise<LoginState> {
-  const username = String(formData.get("username") ?? "");
-  const password = String(formData.get("password") ?? "");
-
-  // Always run both checks so a wrong username and wrong password take the
-  // same amount of work (avoids trivial username enumeration by timing).
-  const userOk = !!process.env.CLINIC_LOGIN_USER && username === process.env.CLINIC_LOGIN_USER;
-  const passOk = verifyPassword(password, process.env.CLINIC_LOGIN_PASSWORD_HASH);
-
-  if (!userOk || !passOk) {
-    return { error: "Invalid username or password." };
+): Promise<RequestState> {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  if (phone.length < 10) {
+    return { sent: false, phone, error: "Enter a valid phone number." };
   }
 
-  await createSession(username);
-  redirect("/dashboard");
+  const user = await prisma.user.findUnique({ where: { phone } });
+  if (!user) {
+    return {
+      sent: false,
+      phone,
+      error: "This number isn't registered. Ask your clinic admin to add you.",
+    };
+  }
+
+  const devCode = await createOtp(phone);
+  return { sent: true, phone, devCode: devCode ?? undefined };
+}
+
+// Step 2: verify the OTP and open a session, then route by role.
+export type VerifyState = { error?: string };
+
+export async function verifyAndLogin(
+  _prev: VerifyState,
+  formData: FormData
+): Promise<VerifyState> {
+  const phone = normalizePhone(String(formData.get("phone") ?? ""));
+  const code = String(formData.get("code") ?? "");
+
+  const ok = await verifyOtp(phone, code);
+  if (!ok) return { error: "Invalid or expired code. Request a new one." };
+
+  const user = await prisma.user.findUnique({ where: { phone } });
+  if (!user) return { error: "Account not found." };
+
+  await createSession({
+    userId: user.id,
+    clinicId: user.clinicId,
+    role: user.role,
+    phone: user.phone,
+    name: user.name,
+  });
+
+  redirect(user.role === "admin" ? "/admin" : "/dashboard");
 }

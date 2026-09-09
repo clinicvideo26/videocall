@@ -24,7 +24,7 @@ export async function createConsultation(
   _prev: CreateState,
   formData: FormData
 ): Promise<CreateState> {
-  await requireSession();
+  const session = await requireSession();
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { status: "error", error: "Please enter a name." };
@@ -44,8 +44,11 @@ export async function createConsultation(
   }
 
   // 2. Persist the record (status defaults to "waiting", consent null).
+  // Owned by the creator's clinic; doctor assignment comes in a later section.
   try {
-    await prisma.consultation.create({ data: { id, name, roomUrl } });
+    await prisma.consultation.create({
+      data: { id, name, roomUrl, clinicId: session.clinicId },
+    });
   } catch {
     return {
       status: "error",

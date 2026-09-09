@@ -1,55 +1,102 @@
 "use client";
 
 import { useActionState } from "react";
-import { login, type LoginState } from "./actions";
+import {
+  requestOtp,
+  verifyAndLogin,
+  type RequestState,
+  type VerifyState,
+} from "./actions";
 
-const initialState: LoginState = { error: "" };
+const requestInit: RequestState = { sent: false, phone: "" };
+const verifyInit: VerifyState = {};
+
+const inputClass =
+  "rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900";
+const buttonClass =
+  "rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-50";
 
 export default function LoginForm() {
-  const [state, formAction, pending] = useActionState(login, initialState);
+  const [reqState, requestAction, requesting] = useActionState(
+    requestOtp,
+    requestInit
+  );
+  const [verifyState, verifyAction, verifying] = useActionState(
+    verifyAndLogin,
+    verifyInit
+  );
+
+  // Once a code has been sent, switch to the code-entry step.
+  if (reqState.sent) {
+    return (
+      <form action={verifyAction} className="flex w-full max-w-sm flex-col gap-4">
+        <input type="hidden" name="phone" value={reqState.phone} />
+
+        <p className="text-sm text-gray-600">
+          Enter the code sent to{" "}
+          <span className="font-medium text-gray-900">{reqState.phone}</span>.
+        </p>
+
+        {reqState.devCode ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Dev mode — your code is{" "}
+            <span className="font-mono font-semibold">{reqState.devCode}</span>
+          </p>
+        ) : null}
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="code" className="text-sm font-medium text-gray-700">
+            Verification code
+          </label>
+          <input
+            id="code"
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            required
+            className={inputClass}
+          />
+        </div>
+
+        {verifyState.error ? (
+          <p role="alert" className="text-sm text-red-600">
+            {verifyState.error}
+          </p>
+        ) : null}
+
+        <button type="submit" disabled={verifying} className={buttonClass}>
+          {verifying ? "Verifying…" : "Verify & sign in"}
+        </button>
+      </form>
+    );
+  }
 
   return (
-    <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
+    <form action={requestAction} className="flex w-full max-w-sm flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <label htmlFor="username" className="text-sm font-medium text-gray-700">
-          Username
+        <label htmlFor="phone" className="text-sm font-medium text-gray-700">
+          Phone number
         </label>
         <input
-          id="username"
-          name="username"
-          type="text"
-          autoComplete="username"
+          id="phone"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          defaultValue={reqState.phone}
           required
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+          className={inputClass}
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium text-gray-700">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
-        />
-      </div>
-
-      {state.error ? (
+      {reqState.error ? (
         <p role="alert" className="text-sm text-red-600">
-          {state.error}
+          {reqState.error}
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-50"
-      >
-        {pending ? "Signing in…" : "Sign in"}
+      <button type="submit" disabled={requesting} className={buttonClass}>
+        {requesting ? "Sending code…" : "Send code"}
       </button>
     </form>
   );

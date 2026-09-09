@@ -14,7 +14,10 @@ export default async function DashboardLayout({
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold tracking-tight">Clinic dashboard</h1>
         <div className="flex items-center gap-3 text-sm text-gray-500">
-          <span>{session.user}</span>
+          <span>
+            {session.name}
+            <span className="ml-1 text-gray-400">({session.role})</span>
+          </span>
           <form action={logout}>
             <button
               type="submit"
