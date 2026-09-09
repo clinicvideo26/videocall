@@ -88,6 +88,22 @@ function verifyToken(token: string | undefined): Session | null {
   }
 }
 
+// --- Token helpers for API clients (the doctor browser extension) ------------
+// The extension can't use the httpOnly session cookie, so it logs in over a
+// JSON API, stores the same signed token, and sends it as `Authorization:
+// Bearer <token>`. Same format as the cookie → both verify identically.
+
+export function issueToken(session: Omit<Session, "exp">): string {
+  return createToken(session);
+}
+
+/** Extract + verify a session from an `Authorization: Bearer <token>` header. */
+export function sessionFromAuthHeader(header: string | null): Session | null {
+  if (!header) return null;
+  const m = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return verifyToken(m ? m[1] : undefined);
+}
+
 // --- Public helpers used by pages / actions ----------------------------------
 
 export async function createSession(session: Omit<Session, "exp">): Promise<void> {
