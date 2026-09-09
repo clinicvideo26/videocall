@@ -118,9 +118,16 @@ export async function requireSession(): Promise<Session> {
   return session;
 }
 
-/** Require one of the given roles; redirect home if the role doesn't match. */
+/** Where each role lands after login. */
+export function landingPath(role: Role): string {
+  if (role === "admin") return "/admin";
+  if (role === "reception") return "/reception";
+  return "/dashboard";
+}
+
+/** Require one of the given roles; redirect to your own home if it doesn't match. */
 export async function requireRole(...roles: Role[]): Promise<Session> {
   const session = await requireSession();
-  if (!roles.includes(session.role)) redirect("/dashboard");
+  if (!roles.includes(session.role)) redirect(landingPath(session.role));
   return session;
 }

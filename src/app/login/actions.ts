@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { createSession, verifySecret } from "@/lib/auth";
+import { createSession, verifySecret, landingPath } from "@/lib/auth";
 import { createOtp, verifyOtp, normalizePhone } from "@/lib/otp";
 
 // Step 1: request an OTP. Only known staff (no self-registration, v2 §3) get a
@@ -60,7 +60,7 @@ export async function verifyAndLogin(
     name: user.name,
   });
 
-  redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  redirect(landingPath(user.role));
 }
 
 // Alternative to OTP for quick re-entry on shared machines (v2 §3): phone + PIN.
@@ -88,5 +88,5 @@ export async function pinLogin(
     name: user.name,
   });
 
-  redirect(user.role === "admin" ? "/admin" : "/dashboard");
+  redirect(landingPath(user.role));
 }
