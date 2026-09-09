@@ -12,17 +12,17 @@ export default function DashboardTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex gap-1 border-b border-gray-200">
+    <nav className="flex gap-1 border-b border-slate-200">
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         return (
           <Link
             key={tab.href}
             href={tab.href}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               active
-                ? "border-gray-900 text-gray-900"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "border-teal-600 text-teal-700"
+                : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {tab.label}

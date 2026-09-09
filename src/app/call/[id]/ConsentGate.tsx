@@ -81,48 +81,48 @@ export default function ConsentGate({
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <div className="flex w-full max-w-lg flex-col gap-5 rounded-lg border border-gray-200 p-6">
+      <div className="card flex w-full max-w-lg flex-col gap-5 p-6">
         <div>
-          <h1 className="text-xl font-semibold">
+          <h1 className="text-xl font-semibold text-slate-900">
             {copy.en.heading}{" "}
-            <span className="text-gray-400">/ {copy.hi.heading}</span>
+            <span className="text-slate-400">/ {copy.hi.heading}</span>
           </h1>
         </div>
 
-        <div className="flex flex-col gap-2 text-sm text-gray-700">
+        <div className="flex flex-col gap-2 text-sm text-slate-700">
           <p>{copy.en.intro}</p>
-          <p className="text-gray-500">{copy.hi.intro}</p>
+          <p className="text-slate-500">{copy.hi.intro}</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             {copy.en.bullets.map((b, i) => (
               <li key={i}>
-                {b} <span className="text-gray-500">/ {copy.hi.bullets[i]}</span>
+                {b} <span className="text-slate-500">/ {copy.hi.bullets[i]}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <label className="flex items-start gap-2 text-sm">
+        <label className="flex items-start gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
-            className="mt-0.5"
+            className="mt-0.5 accent-teal-600"
           />
           <span>
-            {copy.en.agree} <span className="text-gray-500">/ {copy.hi.agree}</span>
+            {copy.en.agree} <span className="text-slate-500">/ {copy.hi.agree}</span>
           </span>
         </label>
 
-        <label className="flex items-start gap-2 text-sm">
+        <label className="flex items-start gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             checked={improve}
             onChange={(e) => setImprove(e.target.checked)}
-            className="mt-0.5"
+            className="mt-0.5 accent-teal-600"
           />
           <span>
             {copy.en.improve}{" "}
-            <span className="text-gray-500">/ {copy.hi.improve}</span>
+            <span className="text-slate-500">/ {copy.hi.improve}</span>
           </span>
         </label>
 
@@ -136,7 +136,7 @@ export default function ConsentGate({
           type="button"
           onClick={join}
           disabled={!agreed || pending}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn btn-primary self-start"
         >
           {pending ? "Joining…" : copy.en.join}
         </button>

@@ -7,8 +7,7 @@ import {
 } from "./actions";
 
 const init: ReceptionCreateState = { status: "idle" };
-const field =
-  "rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900";
+const field = "field";
 
 type Doctor = { id: string; name: string; specialty: string | null };
 
@@ -29,8 +28,8 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
   return (
     <div className="flex flex-col gap-4">
       <form action={action} className="grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patientPhone" className="text-sm font-medium text-gray-700">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="patientPhone" className="label">
             Patient phone
           </label>
           <input
@@ -44,15 +43,15 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="name" className="text-sm font-medium text-gray-700">
-            Name <span className="text-gray-400">(optional)</span>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="name" className="label">
+            Name <span className="font-normal text-slate-400">(optional)</span>
           </label>
           <input id="name" name="name" type="text" placeholder="e.g. Priya S." className={field} />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="doctorId" className="text-sm font-medium text-gray-700">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="doctorId" className="label">
             Doctor
           </label>
           <select id="doctorId" name="doctorId" defaultValue="" className={field}>
@@ -66,15 +65,15 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
           </select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-gray-700">Mode</span>
-          <div className="flex items-center gap-4 pt-2 text-sm">
+        <div className="flex flex-col gap-1.5">
+          <span className="label">Mode</span>
+          <div className="flex items-center gap-4 pt-2 text-sm text-slate-700">
             <label className="flex items-center gap-1.5">
-              <input type="radio" name="mode" value="video" defaultChecked />
+              <input type="radio" name="mode" value="video" defaultChecked className="accent-teal-600" />
               Video (online)
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" name="mode" value="audio" />
+              <input type="radio" name="mode" value="audio" className="accent-teal-600" />
               Audio (in-clinic)
             </label>
           </div>
@@ -84,7 +83,7 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
           <button
             type="submit"
             disabled={pending}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+            className="btn btn-primary"
           >
             {pending ? "Registering…" : "Register consultation"}
           </button>
@@ -98,30 +97,30 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
       ) : null}
 
       {state.status === "success" ? (
-        <div className="flex max-w-xl flex-col gap-2 rounded-md border border-green-200 bg-green-50 p-4">
-          <p className="text-sm font-medium text-green-800">
+        <div className="flex max-w-xl flex-col gap-2 rounded-lg border border-teal-200 bg-teal-50 p-4">
+          <p className="text-sm font-medium text-teal-800">
             Registered {state.name} ({state.mode}).
           </p>
           {state.mode === "video" && state.link ? (
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-gray-500">
+              <span className="text-xs font-medium text-slate-500">
                 Patient link — send this to the patient:
               </span>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded bg-white px-2 py-1 text-xs">
+                <code className="flex-1 break-all rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
                   {state.link}
                 </code>
                 <button
                   type="button"
                   onClick={() => copy(state.link!)}
-                  className="shrink-0 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                  className="btn btn-secondary btn-sm shrink-0"
                 >
                   {copied ? "Copied" : "Copy"}
                 </button>
               </div>
             </div>
           ) : (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500">
               In-clinic audio consultation — no link. The doctor records from the
               room mic.
             </p>

@@ -34,21 +34,20 @@ export default function JoinGate({
     if (!isDoctor) {
       return (
         <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-          <h1 className="text-lg font-medium">Please sign in as clinic staff</h1>
-          <p className="max-w-sm text-sm text-gray-500">
+          <h1 className="text-lg font-semibold text-slate-900">
+            Please sign in as clinic staff
+          </h1>
+          <p className="max-w-sm text-sm text-slate-500">
             The doctor view (with the live transcript) requires a staff login.
             Sign in, then reopen this consultation link.
           </p>
-          <Link
-            href="/login"
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
-          >
+          <Link href="/login" className="btn btn-primary">
             Go to staff login
           </Link>
           <button
             type="button"
             onClick={() => setRole(null)}
-            className="text-xs text-gray-500 underline"
+            className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
           >
             Back
           </button>
@@ -86,29 +85,31 @@ export default function JoinGate({
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <div className="flex w-full max-w-md flex-col gap-5 rounded-lg border border-gray-200 p-6 text-center">
+      <div className="card flex w-full max-w-md flex-col gap-5 p-6 text-center">
         <div>
-          <h1 className="text-xl font-semibold">Join consultation</h1>
-          <p className="mt-1 text-sm text-gray-500">{name}</p>
+          <h1 className="text-xl font-semibold text-slate-900">
+            Join consultation
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">{name}</p>
         </div>
-        <p className="text-sm text-gray-600">Who are you joining as?</p>
+        <p className="text-sm text-slate-600">Who are you joining as?</p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             onClick={() => setRole("doctor")}
-            className="flex-1 rounded-md bg-gray-900 px-4 py-3 text-sm font-medium text-white hover:bg-gray-700"
+            className="btn btn-primary flex-1 py-3"
           >
             Join as Doctor
           </button>
           <button
             type="button"
             onClick={() => setRole("patient")}
-            className="flex-1 rounded-md border border-gray-300 px-4 py-3 text-sm font-medium text-gray-800 hover:bg-gray-100"
+            className="btn btn-secondary flex-1 py-3"
           >
             Join as Patient
           </button>
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-slate-400">
           The doctor sees the live transcript; the patient sees only the video.
         </p>
       </div>

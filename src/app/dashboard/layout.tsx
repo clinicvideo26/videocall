@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
+import Brand from "../_components/Brand";
 import { logout } from "./actions";
 import DashboardTabs from "./DashboardTabs";
 
@@ -11,42 +12,35 @@ export default async function DashboardLayout({
   const session = await requireSession();
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">Clinic dashboard</h1>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          {session.role === "admin" ? (
-            <Link
-              href="/admin"
-              className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100"
-            >
-              Admin
+    <>
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-6 py-3">
+          <Brand title="Clinic dashboard" subtitle={session.name} />
+          <div className="flex items-center gap-2">
+            {session.role === "admin" ? (
+              <Link href="/admin" className="btn btn-secondary btn-sm">
+                Admin
+              </Link>
+            ) : null}
+            <span className="badge bg-slate-100 text-slate-600 capitalize">
+              {session.role}
+            </span>
+            <Link href="/pin" className="btn btn-secondary btn-sm">
+              Set PIN
             </Link>
-          ) : null}
-          <span>
-            {session.name}
-            <span className="ml-1 text-gray-400">({session.role})</span>
-          </span>
-          <Link
-            href="/pin"
-            className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-100"
-          >
-            Set PIN
-          </Link>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 transition-colors hover:bg-gray-100"
-            >
-              Sign out
-            </button>
-          </form>
+            <form action={logout}>
+              <button type="submit" className="btn btn-ghost btn-sm">
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </header>
 
-      <DashboardTabs />
-
-      <div className="flex-1">{children}</div>
-    </div>
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-6 py-8">
+        <DashboardTabs />
+        <div className="flex-1">{children}</div>
+      </div>
+    </>
   );
 }

@@ -1,12 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  /* The app is a light-theme UI (white cards, gray borders, dark text). Pin the
-     palette and color-scheme to light so a device in dark mode doesn't flip the
-     background to black behind light-styled content. */
+  /* Light clinical theme. Pin color-scheme to light so a device in dark mode
+     doesn't flip the page background to black behind light-styled content. */
   color-scheme: light;
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc; /* slate-50 page canvas */
+  --foreground: #0f172a; /* slate-900 text */
 }
 
 @theme inline {
@@ -21,4 +20,52 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
     Roboto, Arial, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared UI primitives. Use these instead of repeating long utility strings so
+   every screen (dashboard, reception, admin, login, pin) stays consistent and
+   the whole look can be tuned from one place. Compose with layout utilities in
+   the markup, e.g. class="btn btn-primary btn-sm".
+--------------------------------------------------------------------------- */
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .label {
+    @apply text-sm font-medium text-slate-700;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm
+      text-slate-900 outline-none transition placeholder:text-slate-400
+      focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20;
+  }
+
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2
+      rounded-lg px-4 py-2 text-sm font-medium transition-colors
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-teal-600 text-white shadow-sm hover:bg-teal-700;
+  }
+  .btn-secondary {
+    @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  }
+  .btn-ghost {
+    @apply text-slate-600 hover:bg-slate-100;
+  }
+  .btn-danger {
+    @apply text-red-600 hover:bg-red-50;
+  }
+  .btn-sm {
+    @apply rounded-md px-3 py-1.5 text-xs;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs
+      font-medium;
+  }
 }

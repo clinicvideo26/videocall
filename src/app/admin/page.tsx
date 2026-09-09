@@ -20,8 +20,10 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Clinic details</h2>
+      <section className="card p-6">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">
+          Clinic details
+        </h2>
         <ClinicForm
           name={clinic?.name ?? ""}
           whatsappNumber={clinic?.whatsappNumber ?? ""}
@@ -30,8 +32,8 @@ export default async function AdminPage() {
 
       <section className="flex flex-col gap-4">
         <div>
-          <h2 className="text-lg font-medium">Staff</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-lg font-semibold text-slate-900">Staff</h2>
+          <p className="mt-1 text-sm text-slate-500">
             Add doctors and reception staff. They sign in with their phone number
             + a one-time code — no self-registration.
           </p>
@@ -41,29 +43,26 @@ export default async function AdminPage() {
           {staff.map((u) => (
             <li
               key={u.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2"
+              className="card flex items-center justify-between gap-3 px-4 py-3"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
+                <p className="truncate text-sm font-medium text-slate-900">
                   {u.name}
-                  <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                  <span className="badge ml-2 bg-slate-100 text-slate-600 capitalize">
                     {u.role}
                   </span>
                   {u.specialty ? (
-                    <span className="ml-1 text-xs text-gray-400">· {u.specialty}</span>
+                    <span className="ml-1 text-xs text-slate-400">· {u.specialty}</span>
                   ) : null}
                 </p>
-                <p className="text-xs text-gray-500">{u.phone}</p>
+                <p className="text-xs text-slate-500">{u.phone}</p>
               </div>
               {u.id === session.userId ? (
-                <span className="text-xs text-gray-400">you</span>
+                <span className="text-xs text-slate-400">you</span>
               ) : (
                 <form action={deleteStaff}>
                   <input type="hidden" name="id" value={u.id} />
-                  <button
-                    type="submit"
-                    className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
+                  <button type="submit" className="btn btn-danger btn-sm">
                     Remove
                   </button>
                 </form>
@@ -72,8 +71,10 @@ export default async function AdminPage() {
           ))}
         </ul>
 
-        <div className="rounded-md border border-dashed border-gray-300 p-4">
-          <h3 className="mb-3 text-sm font-medium">Add a staff member</h3>
+        <div className="card border-dashed p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">
+            Add a staff member
+          </h3>
           <AddStaffForm />
         </div>
       </section>

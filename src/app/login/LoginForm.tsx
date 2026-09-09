@@ -13,11 +13,9 @@ const requestInit: RequestState = { sent: false, phone: "" };
 const verifyInit: VerifyState = {};
 const pinInit: VerifyState = {};
 
-const inputClass =
-  "rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900";
-const buttonClass =
-  "rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-50";
-const linkClass = "text-sm text-gray-500 underline";
+const inputClass = "field";
+const buttonClass = "btn btn-primary";
+const linkClass = "text-sm text-slate-500 underline underline-offset-2 hover:text-slate-700";
 
 export default function LoginForm() {
   const [mode, setMode] = useState<"otp" | "pin">("otp");
@@ -29,16 +27,16 @@ export default function LoginForm() {
   // --- PIN sign-in -----------------------------------------------------------
   if (mode === "pin") {
     return (
-      <form action={pinAction} className="flex w-full max-w-sm flex-col gap-4">
+      <form action={pinAction} className="flex w-full flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <label htmlFor="pin-phone" className="text-sm font-medium text-gray-700">
+          <label htmlFor="pin-phone" className="label">
             Phone number
           </label>
           <input id="pin-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" required className={inputClass} />
         </div>
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="pin" className="text-sm font-medium text-gray-700">
+          <label htmlFor="pin" className="label">
             PIN
           </label>
           <input id="pin" name="pin" type="password" inputMode="numeric" autoComplete="current-password" required className={inputClass} />
@@ -62,12 +60,12 @@ export default function LoginForm() {
   // --- OTP step 2: enter the code -------------------------------------------
   if (reqState.sent) {
     return (
-      <form action={verifyAction} className="flex w-full max-w-sm flex-col gap-4">
+      <form action={verifyAction} className="flex w-full flex-col gap-4">
         <input type="hidden" name="phone" value={reqState.phone} />
 
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-slate-600">
           Enter the code sent to{" "}
-          <span className="font-medium text-gray-900">{reqState.phone}</span>.
+          <span className="font-medium text-slate-900">{reqState.phone}</span>.
         </p>
 
         {reqState.devCode ? (
@@ -78,7 +76,7 @@ export default function LoginForm() {
         ) : null}
 
         <div className="flex flex-col gap-1">
-          <label htmlFor="code" className="text-sm font-medium text-gray-700">
+          <label htmlFor="code" className="label">
             Verification code
           </label>
           <input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required className={inputClass} />
@@ -97,9 +95,9 @@ export default function LoginForm() {
 
   // --- OTP step 1: enter phone ----------------------------------------------
   return (
-    <form action={requestAction} className="flex w-full max-w-sm flex-col gap-4">
+    <form action={requestAction} className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <label htmlFor="phone" className="text-sm font-medium text-gray-700">
+        <label htmlFor="phone" className="label">
           Phone number
         </label>
         <input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={reqState.phone} required className={inputClass} />

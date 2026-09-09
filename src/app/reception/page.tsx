@@ -6,10 +6,10 @@ import { sendIn } from "./actions";
 export const dynamic = "force-dynamic";
 
 const statusStyle: Record<string, string> = {
-  registered: "bg-blue-100 text-blue-700",
+  registered: "bg-sky-100 text-sky-700",
   in_room: "bg-amber-100 text-amber-700",
-  active: "bg-green-100 text-green-700",
-  review: "bg-purple-100 text-purple-700",
+  active: "bg-teal-100 text-teal-700",
+  review: "bg-violet-100 text-violet-700",
 };
 
 export default async function ReceptionPage() {
@@ -40,10 +40,12 @@ export default async function ReceptionPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Register a consultation</h2>
+      <section className="card p-6">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">
+          Register a consultation
+        </h2>
         {doctors.length === 0 ? (
-          <p className="text-sm text-amber-700">
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
             No doctors added yet — an admin can add them on the Admin screen. You
             can still register a consultation as unassigned.
           </p>
@@ -52,9 +54,11 @@ export default async function ReceptionPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Currently in the clinic</h2>
+        <h2 className="text-lg font-semibold text-slate-900">
+          Currently in the clinic
+        </h2>
         {consultations.length === 0 ? (
-          <p className="rounded-md border border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
+          <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-400">
             No active consultations.
           </p>
         ) : (
@@ -62,23 +66,23 @@ export default async function ReceptionPage() {
             {consultations.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2"
+                className="card flex items-center justify-between gap-3 px-4 py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
+                  <p className="truncate text-sm font-medium text-slate-900">
                     {c.name}
-                    <span className="ml-2 text-xs text-gray-400">
+                    <span className="ml-2 text-xs text-slate-400">
                       {c.patientPhone}
                     </span>
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500 capitalize">
                     {c.mode} · {c.doctor?.name ?? "unassigned"}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span
-                    className={`rounded px-2 py-0.5 text-xs ${
-                      statusStyle[c.status] ?? "bg-gray-100 text-gray-600"
+                    className={`badge capitalize ${
+                      statusStyle[c.status] ?? "bg-slate-100 text-slate-600"
                     }`}
                   >
                     {c.status}
@@ -88,7 +92,7 @@ export default async function ReceptionPage() {
                       <input type="hidden" name="id" value={c.id} />
                       <button
                         type="submit"
-                        className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700"
+                        className="btn btn-primary btn-sm"
                       >
                         Send in
                       </button>

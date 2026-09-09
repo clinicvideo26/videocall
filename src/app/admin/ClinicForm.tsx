@@ -15,9 +15,9 @@ export default function ClinicForm({
   const [state, action, pending] = useActionState(updateClinic, init);
 
   return (
-    <form action={action} className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="clinic-name" className="text-sm font-medium text-gray-700">
+    <form action={action} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="clinic-name" className="label">
           Clinic name
         </label>
         <input
@@ -25,12 +25,12 @@ export default function ClinicForm({
           name="name"
           defaultValue={name}
           required
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+          className="field max-w-md"
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="clinic-wa" className="text-sm font-medium text-gray-700">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="clinic-wa" className="label">
           WhatsApp number
         </label>
         <input
@@ -40,20 +40,20 @@ export default function ClinicForm({
           inputMode="tel"
           defaultValue={whatsappNumber}
           placeholder="919876543210"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+          className="field max-w-md"
         />
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-slate-400">
           Digits only, international format. This is where consultation PDFs are sent.
         </p>
       </div>
 
       {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      {state.ok ? <p className="text-sm text-green-700">{state.ok}</p> : null}
+      {state.ok ? <p className="text-sm text-teal-700">{state.ok}</p> : null}
 
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+        className="btn btn-primary self-start"
       >
         {pending ? "Saving…" : "Save clinic"}
       </button>
