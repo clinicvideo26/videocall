@@ -9,7 +9,13 @@ import { hashSecret, verifySecret } from "./auth";
 // SMS sender slots into `deliverOtp` later.
 
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const isDev = process.env.NODE_ENV !== "production";
+
+// Whether to reveal the code to the login screen. Always on outside production;
+// in production it needs an explicit opt-in (OTP_DEV_MODE=true) so the app is
+// usable on the live site until real WhatsApp/SMS delivery is wired up. Turn
+// this OFF the moment real delivery exists.
+const exposeCode =
+  process.env.NODE_ENV !== "production" || process.env.OTP_DEV_MODE === "true";
 
 /** Digits only — the canonical form we store and match on. */
 export function normalizePhone(input: string): string {
@@ -41,7 +47,7 @@ export async function createOtp(phone: string): Promise<string | null> {
   });
 
   await deliverOtp(phone, code);
-  return isDev ? code : null;
+  return exposeCode ? code : null;
 }
 
 /** Verify + consume the newest live OTP for `phone`. */
