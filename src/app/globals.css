@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 :root {
+  /* The app is a light-theme UI (white cards, gray borders, dark text). Pin the
+     palette and color-scheme to light so a device in dark mode doesn't flip the
+     background to black behind light-styled content. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -12,15 +16,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
+    Roboto, Arial, sans-serif;
 }
