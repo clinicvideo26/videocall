@@ -112,6 +112,9 @@ model Consultation {
   /// Daily.co room URL (video only; empty for audio consultations).
   roomUrl        String
   createdAt      DateTime           @default(now())
+  /// Appointment time (v2 video flow). Reception enters a clinic-local (IST)
+  /// date+time; stored as UTC. Nullable: audio/walk-in and pre-v2 rows have none.
+  scheduledAt    DateTime?
   status         ConsultationStatus @default(waiting)
   /// When the patient accepted the consent screen (null until they agree).
   consentAt      DateTime?

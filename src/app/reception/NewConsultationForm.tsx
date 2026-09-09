@@ -50,6 +50,19 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
           <input id="name" name="name" type="text" placeholder="e.g. Priya S." className={field} />
         </div>
 
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="scheduledAt" className="label">
+            Appointment date &amp; time{" "}
+            <span className="font-normal text-slate-400">(required for video)</span>
+          </label>
+          <input
+            id="scheduledAt"
+            name="scheduledAt"
+            type="datetime-local"
+            className={`${field} sm:max-w-xs`}
+          />
+        </div>
+
         <div className="flex flex-col gap-1.5">
           <label htmlFor="doctorId" className="label">
             Doctor

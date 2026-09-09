@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatIst } from "@/lib/time";
 import NewConsultationForm from "./NewConsultationForm";
 import { sendIn } from "./actions";
 
@@ -26,7 +27,7 @@ export default async function ReceptionPage() {
       clinicId: session.clinicId,
       status: { in: ["registered", "in_room", "active", "review"] },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ scheduledAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
     take: 40,
     select: {
       id: true,
@@ -34,6 +35,7 @@ export default async function ReceptionPage() {
       patientPhone: true,
       mode: true,
       status: true,
+      scheduledAt: true,
       doctor: { select: { name: true } },
     },
   });
@@ -75,8 +77,14 @@ export default async function ReceptionPage() {
                       {c.patientPhone}
                     </span>
                   </p>
-                  <p className="text-xs text-slate-500 capitalize">
-                    {c.mode} · {c.doctor?.name ?? "unassigned"}
+                  <p className="text-xs text-slate-500">
+                    <span className="capitalize">{c.mode}</span> ·{" "}
+                    {c.doctor?.name ?? "unassigned"}
+                    {c.scheduledAt ? (
+                      <span className="ml-1 font-medium text-slate-600">
+                        · {formatIst(c.scheduledAt)}
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

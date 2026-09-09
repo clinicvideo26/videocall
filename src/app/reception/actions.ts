@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { createDailyRoom } from "@/lib/daily";
 import { generateConsultationId } from "@/lib/ids";
 import { normalizePhone } from "@/lib/otp";
+import { istInputToDate } from "@/lib/time";
 
 export type ReceptionCreateState =
   | { status: "idle" }
@@ -40,9 +41,16 @@ export async function createReceptionConsultation(
   const nameInput = String(formData.get("name") ?? "").trim();
   const doctorId = String(formData.get("doctorId") ?? "").trim();
   const mode = String(formData.get("mode") ?? "") === "audio" ? "audio" : "video";
+  const scheduledAt = istInputToDate(String(formData.get("scheduledAt") ?? ""));
 
   if (patientPhone.length < 10) {
     return { status: "error", error: "Enter a valid patient phone number." };
+  }
+
+  // Video is booked for an appointment time; require it so the doctor's queue
+  // can gate on it. Audio (walk-in) may be immediate, so it's optional there.
+  if (mode === "video" && !scheduledAt) {
+    return { status: "error", error: "Pick the appointment date & time." };
   }
 
   // Doctor must belong to this clinic (unassigned is allowed).
@@ -94,6 +102,7 @@ export async function createReceptionConsultation(
         doctorId: assignedDoctorId,
         mode,
         roomUrl,
+        scheduledAt,
         status: "registered",
       },
     });
