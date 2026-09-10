@@ -59,6 +59,7 @@ export default function NewConsultationForm({ doctors }: { doctors: Doctor[] }) 
             id="scheduledAt"
             name="scheduledAt"
             type="datetime-local"
+            step={900}
             className={`${field} sm:max-w-xs`}
           />
         </div>
