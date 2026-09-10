@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatIst } from "@/lib/time";
 import NewConsultationForm from "./NewConsultationForm";
-import { sendIn } from "./actions";
+import { sendIn, deleteConsultation } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +106,12 @@ export default async function ReceptionPage() {
                       </button>
                     </form>
                   ) : null}
+                  <form action={deleteConsultation}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button type="submit" className="btn btn-danger btn-sm">
+                      Delete
+                    </button>
+                  </form>
                 </div>
               </li>
             ))}

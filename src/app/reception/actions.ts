@@ -158,3 +158,15 @@ export async function sendIn(formData: FormData): Promise<void> {
   });
   revalidatePath("/reception");
 }
+
+// Remove a consultation (e.g. a mistaken/duplicate registration). Scoped to the
+// reception's own clinic.
+export async function deleteConsultation(formData: FormData): Promise<void> {
+  const session = await requireRole("reception", "admin");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.consultation.deleteMany({
+    where: { id, clinicId: session.clinicId },
+  });
+  revalidatePath("/reception");
+}
