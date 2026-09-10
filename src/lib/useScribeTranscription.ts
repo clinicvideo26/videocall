@@ -92,6 +92,8 @@ export function useScribeTranscription(
   const nodeRef = useRef<AudioWorkletNode | null>(null);
   const queueRef = useRef<string[]>([]); // audio captured before the socket opens
   const segId = useRef(0);
+  // Last committed text, to drop an exact back-to-back duplicate segment.
+  const lastCommittedRef = useRef("");
   // True only when we created the stream (getUserMedia). A borrowed stream from
   // the Daily call must NOT have its tracks stopped here — that would cut the
   // call's audio for everyone.
@@ -260,11 +262,16 @@ export function useScribeTranscription(
             case "partial_transcript":
               setPartial(msg.text ?? "");
               break;
-            case "committed_transcript":
-            case "committed_transcript_with_timestamps": {
+            // Scribe emits the same finalized segment on BOTH
+            // `committed_transcript` and `committed_transcript_with_timestamps`,
+            // which doubled the transcript. Handle only the former. The
+            // last-text guard also drops an exact back-to-back repeat.
+            case "committed_transcript": {
               setPartial("");
               const src = msg.text?.trim();
               if (!src) break;
+              if (src === lastCommittedRef.current) break;
+              lastCommittedRef.current = src;
               const id = segId.current++;
               const lang = (msg.language_code ?? "").toLowerCase();
               const isEnglish = lang.startsWith("en");
