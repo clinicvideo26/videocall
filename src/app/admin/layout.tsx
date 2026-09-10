@@ -23,7 +23,7 @@ export default async function AdminLayout({
               Dashboard
             </Link>
             <Link href="/pin" className="btn btn-secondary btn-sm">
-              Set PIN
+              Account
             </Link>
             <form action={logout}>
               <button type="submit" className="btn btn-ghost btn-sm">

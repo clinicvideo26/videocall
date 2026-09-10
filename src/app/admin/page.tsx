@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import ClinicForm from "./ClinicForm";
@@ -5,6 +6,10 @@ import AddStaffForm from "./AddStaffForm";
 import { deleteStaff } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+// The seed/demo admin number, which can't receive WhatsApp codes. While the
+// admin is still on it, prompt them to switch to a real number + set a PIN.
+const DEMO_ADMIN_PHONE = "9999999999";
 
 export default async function AdminPage() {
   const session = await requireRole("admin");
@@ -20,6 +25,23 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      {session.phone === DEMO_ADMIN_PHONE ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+          <h2 className="text-sm font-semibold text-amber-900">
+            Finish setting up your account
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            You&apos;re signed in with the demo number{" "}
+            <span className="font-mono">{DEMO_ADMIN_PHONE}</span>, which can&apos;t
+            receive WhatsApp login codes. Change it to your real WhatsApp number
+            and set a PIN so you&apos;re not locked out.
+          </p>
+          <Link href="/pin" className="btn btn-primary btn-sm mt-3">
+            Go to Account →
+          </Link>
+        </div>
+      ) : null}
+
       <section className="card p-6">
         <h2 className="mb-4 text-lg font-semibold text-slate-900">
           Clinic details
