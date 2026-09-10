@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Clinic Doctor — Queue",
-  "version": "0.1.0",
-  "description": "Doctor's consultation queue. Appointments appear 5 minutes before their time; tap Video to join the patient's room.",
-  "permissions": ["storage", "sidePanel", "tabs"],
+  "version": "0.2.0",
+  "description": "Doctor's consultation queue. Appointments appear 5 minutes before their time with a desktop alert; tap Join to enter the patient's room.",
+  "permissions": ["storage", "sidePanel", "tabs", "notifications", "alarms"],
   "host_permissions": [
     "https://videocall-84v7.onrender.com/*",
     "http://localhost:3000/*"
   ],
   "background": { "service_worker": "background.js" },
-  "action": { "default_title": "Doctor queue" },
+  "action": { "default_title": "Doctor queue", "default_icon": "icon128.png" },
+  "icons": { "128": "icon128.png" },
   "side_panel": { "default_path": "panel.html" }
 }

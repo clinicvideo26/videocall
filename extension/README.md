@@ -5,6 +5,12 @@ then shows the doctor's appointments **only from 5 minutes before** their
 scheduled time. Tap **Video** to open the patient's call in a new tab (the call
 page shows the live transcript).
 
+**Desktop alerts:** even when the panel is closed, the extension polls in the
+background every minute and, the moment an appointment crosses its 5-min mark,
+fires a **desktop notification with sound** and a **Join video call** button —
+so the doctor is alerted at call time without watching the widget. (Requires the
+`notifications` permission; keep the doctor signed in.)
+
 It's a plain Manifest V3 extension — no build step.
 
 ## Load it (Chrome / Edge, unpacked)
