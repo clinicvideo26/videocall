@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatIst } from "@/lib/time";
 import { deleteConsultation } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,7 @@ export default async function TranscriptsPage() {
                 <div className="min-w-0">
                   <p className="truncate font-medium text-slate-900">{c.name}</p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    {c.createdAt.toISOString().replace("T", " ").slice(0, 16)} UTC
+                    {formatIst(c.createdAt)}
                     {" · "}
                     <code>{c.id.slice(0, 10)}…</code>
                   </p>

@@ -1,5 +1,6 @@
 import "server-only";
 import PDFDocument from "pdfkit";
+import { formatIst } from "./time";
 
 export type ConsultationPdfData = {
   name: string;
@@ -39,7 +40,7 @@ export function buildConsultationPdf(
     doc.fontSize(11).font("Helvetica");
     doc.text(`Patient / reference: ${data.name}`);
     doc.text(`Consultation ID: ${data.id}`);
-    doc.text(`Date / time: ${data.createdAt.toISOString().replace("T", " ").slice(0, 16)} UTC`);
+    doc.text(`Date / time: ${formatIst(data.createdAt)} IST`);
     doc.moveDown(1);
 
     doc.fontSize(14).font("Helvetica-Bold").text("Summary");
