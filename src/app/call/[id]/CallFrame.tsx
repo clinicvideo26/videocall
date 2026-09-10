@@ -10,6 +10,7 @@ export default function CallFrame({
   showTranscript = false,
   userName,
   role,
+  token,
 }: {
   id: string;
   name: string;
@@ -17,6 +18,7 @@ export default function CallFrame({
   showTranscript?: boolean;
   userName: string;
   role: "doctor" | "patient";
+  token?: string;
 }) {
   return (
     <main className="flex flex-1 flex-col">
@@ -30,6 +32,7 @@ export default function CallFrame({
           showTranscript={showTranscript}
           userName={userName}
           role={role}
+          token={token}
         />
       </div>
     </main>

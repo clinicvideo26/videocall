@@ -47,18 +47,26 @@ export default function CallRoom({
   showTranscript = false,
   userName,
   role,
+  token,
 }: {
   roomUrl: string;
   consultationId: string;
   showTranscript?: boolean;
   userName: string;
   role: "doctor" | "patient";
+  // Owner meeting token for the doctor (private rooms). Patients have none and
+  // knock instead.
+  token?: string;
 }) {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [status, setStatus] = useState<CallStatus>("joining");
   const [error, setError] = useState("");
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  // Waiting room: patients this doctor can admit (doctor side); whether we (the
+  // patient) are waiting to be let in (patient side).
+  const [waiting, setWaiting] = useState<{ id: string; name: string }[]>([]);
+  const [lobby, setLobby] = useState(false);
   const [patientAudioReady, setPatientAudioReady] = useState(false);
   const [videoReduced, setVideoReduced] = useState(false);
   const callRef = useRef<DailyCall | null>(null);
@@ -174,10 +182,44 @@ export default function CallRoom({
       applyQuality(ev?.cpuLoadState === "high" ? "low" : "medium");
     });
 
-    call.join({ url: roomUrl, userName }).catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : "Could not join the call.");
-      setStatus("error");
-    });
+    // --- Waiting room (private rooms + knocking) ---------------------------
+    // Patient: when we land in the lobby, knock once and show a waiting state.
+    let knocked = false;
+    const syncAccess = () => {
+      const access = (call.accessState?.() as { access?: string } | undefined)
+        ?.access;
+      if (access === "lobby") {
+        setLobby(true);
+        if (!knocked) {
+          knocked = true;
+          call.requestAccess?.({ name: userName }).catch(() => {});
+        }
+      } else {
+        setLobby(false);
+      }
+    };
+    call.on("access-state-updated", syncAccess);
+
+    // Doctor (owner): surface knocking patients so they can be admitted/denied.
+    const syncWaiting = () => {
+      const wp = (call.waitingParticipants?.() ?? {}) as Record<
+        string,
+        { id: string; name?: string }
+      >;
+      setWaiting(
+        Object.values(wp).map((p) => ({ id: p.id, name: p.name || "Patient" }))
+      );
+    };
+    call.on("waiting-participant-added", syncWaiting);
+    call.on("waiting-participant-updated", syncWaiting);
+    call.on("waiting-participant-removed", syncWaiting);
+
+    call
+      .join({ url: roomUrl, userName, ...(token ? { token } : {}) })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : "Could not join the call.");
+        setStatus("error");
+      });
 
     return () => {
       call.destroy().catch(() => {});
@@ -185,7 +227,21 @@ export default function CallRoom({
       sessionStreams.clear();
       remoteAudioRef.current = null;
     };
-  }, [roomUrl, userName, role]);
+  }, [roomUrl, userName, role, token]);
+
+  function admitWaiting(participantId: string, grant: boolean) {
+    const call = callRef.current as
+      | (DailyCall & {
+          updateWaitingParticipant?: (
+            id: string,
+            u: { grantRequestedAccess: boolean }
+          ) => Promise<unknown>;
+        })
+      | null;
+    call
+      ?.updateWaitingParticipant?.(participantId, { grantRequestedAccess: grant })
+      .catch(() => {});
+  }
 
   function toggleMic() {
     const call = callRef.current;
@@ -212,6 +268,43 @@ export default function CallRoom({
         ) : null}
         {status === "joining" ? (
           <p className="text-sm text-gray-400">Joining the call…</p>
+        ) : null}
+
+        {role === "doctor" && waiting.length > 0 ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3">
+            {waiting.map((w) => (
+              <div
+                key={w.id}
+                className="flex items-center justify-between gap-2 py-1"
+              >
+                <span className="text-sm text-amber-900">
+                  <span className="font-medium">{w.name}</span> is waiting to join
+                </span>
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => admitWaiting(w.id, true)}
+                    className="rounded-md bg-teal-600 px-3 py-1 text-xs font-medium text-white hover:bg-teal-700"
+                  >
+                    Admit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => admitWaiting(w.id, false)}
+                    className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    Deny
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {role === "patient" && lobby ? (
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
+            Waiting for the doctor to let you in…
+          </div>
         ) : null}
 
         <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">

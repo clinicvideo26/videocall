@@ -18,12 +18,14 @@ export default function JoinGate({
   roomUrl,
   isDoctor,
   consentAlready,
+  doctorToken,
 }: {
   id: string;
   name: string;
   roomUrl: string;
   isDoctor: boolean;
   consentAlready: boolean;
+  doctorToken?: string;
 }) {
   const [role, setRole] = useState<Role>(null);
 
@@ -62,6 +64,7 @@ export default function JoinGate({
         showTranscript
         userName="Doctor"
         role="doctor"
+        token={doctorToken}
       />
     );
   }

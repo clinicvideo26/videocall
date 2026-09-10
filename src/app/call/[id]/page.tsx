@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { createMeetingToken } from "@/lib/daily";
 import JoinGate from "./JoinGate";
 
 // Branded wrapper (spec 3.2/3.3). The visitor first picks a role (Doctor /
@@ -34,7 +35,24 @@ export default async function CallPage({
 
   if (!consultation) notFound();
 
-  const isDoctor = !!(await getSession());
+  // Only a logged-in staff member gets an owner meeting token (so they join the
+  // private room directly and can admit patients). Patients get no token and
+  // must knock. Minting only for a session means the token never reaches a
+  // patient's page.
+  const session = await getSession();
+  const isDoctor = !!session;
+  let doctorToken: string | undefined;
+  if (isDoctor && consultation.roomUrl) {
+    try {
+      doctorToken = await createMeetingToken({
+        roomName: id,
+        isOwner: true,
+        userName: "Doctor",
+      });
+    } catch (e) {
+      console.error("[daily] doctor token mint failed:", e);
+    }
+  }
 
   return (
     <JoinGate
@@ -43,6 +61,7 @@ export default async function CallPage({
       roomUrl={consultation.roomUrl}
       isDoctor={isDoctor}
       consentAlready={!!consultation.consentAt}
+      doctorToken={doctorToken}
     />
   );
 }
