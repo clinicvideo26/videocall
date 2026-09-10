@@ -22,9 +22,6 @@ export default async function DashboardLayout({
                 Admin
               </Link>
             ) : null}
-            <span className="badge bg-slate-100 text-slate-600 capitalize">
-              {session.role}
-            </span>
             <Link href="/pin" className="btn btn-secondary btn-sm">
               Account
             </Link>
