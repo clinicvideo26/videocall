@@ -122,10 +122,9 @@ export function appointmentWhatsAppConfig(): AppointmentConfig | null {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const template = process.env.WHATSAPP_APPOINTMENT_TEMPLATE_NAME;
-  const lang =
-    process.env.WHATSAPP_APPOINTMENT_TEMPLATE_LANG ||
-    process.env.WHATSAPP_TEMPLATE_LANG ||
-    "en_US";
+  // The template was created as "English" (en). Default to that; override with
+  // WHATSAPP_APPOINTMENT_TEMPLATE_LANG if you build it in another language.
+  const lang = process.env.WHATSAPP_APPOINTMENT_TEMPLATE_LANG || "en";
   if (!phoneNumberId || !token || !template) return null;
   return { phoneNumberId, token, template, lang };
 }
