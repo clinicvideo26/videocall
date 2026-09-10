@@ -128,7 +128,7 @@ export async function createReceptionConsultation(
         patientPhone,
         name,
         timeLabel: formatIst(scheduledAt),
-        consultationId: id,
+        link,
       });
       whatsapp = "sent";
     } catch (e) {
