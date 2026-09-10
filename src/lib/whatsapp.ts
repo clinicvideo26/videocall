@@ -203,6 +203,76 @@ export async function sendPatientAppointment(opts: {
   }
 }
 
+// --- Staff login OTP over WhatsApp -------------------------------------------
+// Deliver the phone-login code via an approved Authentication template (e.g.
+// revive_login_otp) instead of only logging it. Reuses the same number/token.
+
+type OtpConfig = {
+  phoneNumberId: string;
+  token: string;
+  template: string;
+  lang: string;
+};
+
+export function otpWhatsAppConfig(): OtpConfig | null {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const template = process.env.WHATSAPP_OTP_TEMPLATE_NAME;
+  const lang = process.env.WHATSAPP_OTP_TEMPLATE_LANG || "en";
+  if (!phoneNumberId || !token || !template) return null;
+  return { phoneNumberId, token, template, lang };
+}
+
+export function isOtpWhatsAppConfigured(): boolean {
+  return otpWhatsAppConfig() !== null;
+}
+
+/**
+ * Send a login code via the WhatsApp Authentication template. Meta's auth
+ * templates require the code in BOTH the body and the copy-code/one-tap button,
+ * hence the two components. Throws the Meta error on failure.
+ */
+export async function sendOtpCode(phone: string, code: string): Promise<void> {
+  const cfg = otpWhatsAppConfig();
+  if (!cfg) throw new Error("OTP WhatsApp template is not configured.");
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: toRecipient(phone),
+    type: "template",
+    template: {
+      name: cfg.template,
+      language: { code: cfg.lang },
+      components: [
+        { type: "body", parameters: [{ type: "text", text: code }] },
+        {
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: code }],
+        },
+      ],
+    },
+  };
+
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(
+      `WhatsApp OTP send failed (${res.status}): ${JSON.stringify(
+        data.error ?? data
+      )}`
+    );
+  }
+}
+
 // Upload + send. Throws (with the Meta error) on any failure so the caller can
 // log it; returns nothing on success.
 export async function sendWhatsAppPdf(

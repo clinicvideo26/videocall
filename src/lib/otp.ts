@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { prisma } from "./prisma";
 import { hashSecret, verifySecret } from "./auth";
+import { sendOtpCode, isOtpWhatsAppConfigured } from "./whatsapp";
 
 // Phone + OTP challenge store (v2 §3). Codes are stored hashed with a short
 // expiry. Delivery is pluggable: in dev the code is logged (and surfaced to the
@@ -23,7 +24,18 @@ export function normalizePhone(input: string): string {
 }
 
 async function deliverOtp(phone: string, code: string): Promise<void> {
-  // TODO(step 12+): send via WhatsApp/SMS in production.
+  // Prefer real WhatsApp delivery via the approved Authentication template.
+  // On any failure (misconfig, template mismatch) fall back to logging so a
+  // delivery problem never blocks login — the code still works, and dev/OTP_DEV
+  // mode surfaces it on screen.
+  if (isOtpWhatsAppConfigured()) {
+    try {
+      await sendOtpCode(phone, code);
+      return;
+    } catch (e) {
+      console.error("[otp] WhatsApp send failed, falling back to log:", e);
+    }
+  }
   console.log(`[otp] login code for ${phone}: ${code}`);
 }
 
