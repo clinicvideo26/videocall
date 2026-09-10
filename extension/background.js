@@ -82,7 +82,11 @@ function notify(a) {
     priority: 2,
     requireInteraction: true, // stay until the doctor acts
   };
-  if (a.joinUrl) opts.buttons = [{ title: "Join video call" }];
+  if (a.joinUrl) {
+    opts.buttons = [
+      { title: a.mode === "audio" ? "Start consultation" : "Join video call" },
+    ];
+  }
   chrome.notifications.create("appt:" + a.id, opts);
 }
 

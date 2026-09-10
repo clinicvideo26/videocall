@@ -21,9 +21,14 @@ const statusLabel: Record<ScribeStatus, string> = {
 export default function TranscriptPanel({
   consultationId,
   transcription,
+  showPatientAudio = true,
 }: {
   consultationId: string;
   transcription: MergedTranscription;
+  // Video calls transcribe two sources (doctor mic + patient audio) and show a
+  // "patient audio connected" hint. In-clinic audio is a single room mic, so
+  // that hint (and per-speaker labels) don't apply.
+  showPatientAudio?: boolean;
 }) {
   const {
     status,
@@ -137,7 +142,7 @@ export default function TranscriptPanel({
         }`}
       >
         {statusLabel[status]}
-        {active ? (
+        {active && showPatientAudio ? (
           <span className="text-gray-400">
             {" "}
             · Patient audio {patientAudioReady ? "connected" : "waiting…"}
@@ -154,7 +159,9 @@ export default function TranscriptPanel({
         ) : null}
         {committed.map((seg) => (
           <p key={`${seg.role}-${seg.id}`} className="mb-1">
-            <span className="font-medium text-gray-500">{seg.role}: </span>
+            {seg.role ? (
+              <span className="font-medium text-gray-500">{seg.role}: </span>
+            ) : null}
             {seg.english ? (
               <span>{seg.english}</span>
             ) : (
@@ -165,7 +172,7 @@ export default function TranscriptPanel({
         ))}
         {partials.map((p) => (
           <p key={p.role} className="mb-1 text-gray-400">
-            <span className="font-medium">{p.role}: </span>
+            {p.role ? <span className="font-medium">{p.role}: </span> : null}
             {p.text}
           </p>
         ))}

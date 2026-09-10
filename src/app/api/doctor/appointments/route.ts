@@ -65,9 +65,13 @@ export async function GET(req: Request) {
     status: c.status,
     scheduledAt: c.scheduledAt?.toISOString() ?? null,
     scheduledLabel: c.scheduledAt ? formatIst(c.scheduledAt) : null,
-    // Where the doctor joins (video only). The call page's Doctor button is
-    // login-gated separately; the extension opens it in a tab.
-    joinUrl: c.mode === "video" ? `${base}/call/${c.id}` : null,
+    // Where the doctor opens the consultation: the video room for online calls,
+    // or the in-clinic audio screen for audio. Both are login-gated; the
+    // extension opens the URL in a tab.
+    joinUrl:
+      c.mode === "video"
+        ? `${base}/call/${c.id}`
+        : `${base}/consultation/${c.id}/audio`,
   }));
 
   return corsJson({ doctor: session.name, appointments });

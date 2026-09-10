@@ -150,14 +150,9 @@ function renderAppointments(list) {
     if (a.joinUrl) {
       const btn = document.createElement("button");
       btn.className = "join";
-      btn.textContent = "Video";
+      btn.textContent = a.mode === "audio" ? "Start" : "Video";
       btn.addEventListener("click", () => chrome.tabs.create({ url: a.joinUrl }));
       actions.appendChild(btn);
-    } else {
-      const tag = document.createElement("span");
-      tag.className = "audio-tag";
-      tag.textContent = "Audio — in clinic";
-      actions.appendChild(tag);
     }
     ul.appendChild(li);
   }
