@@ -10,6 +10,39 @@ export type ConsultationPdfData = {
   transcript: string | null;
 };
 
+// Word set of a line, lowercased, punctuation stripped — for comparing lines.
+function wordSet(line: string): Set<string> {
+  return new Set(
+    line
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+  );
+}
+
+// Drop consecutive near-duplicate lines from a transcript. Older records were
+// saved with each segment doubled (Scribe emitted it on two message types); this
+// cleans them at render time (and is a harmless no-op on already-clean records).
+export function dedupeTranscript(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const kept: string[] = [];
+  for (const line of lines) {
+    const prev = kept[kept.length - 1];
+    if (prev !== undefined && line.trim() && prev.trim()) {
+      const a = wordSet(line);
+      const b = wordSet(prev);
+      let inter = 0;
+      for (const w of a) if (b.has(w)) inter++;
+      const union = a.size + b.size - inter;
+      const similarity = union === 0 ? 1 : inter / union;
+      if (similarity >= 0.8) continue; // near-identical to the previous line
+    }
+    kept.push(line);
+  }
+  return kept.join("\n");
+}
+
 // Build a consultation PDF (header + summary + full transcript) in-house with
 // pdfkit — no headless browser, no external service. pdfkit handles text wrap
 // and pagination automatically.
@@ -52,7 +85,8 @@ export function buildConsultationPdf(
 
     doc.fontSize(14).font("Helvetica-Bold").text("Full transcript");
     doc.moveDown(0.3);
-    doc.fontSize(10).font("Helvetica").text(data.transcript?.trim() || "(No transcript recorded.)", {
+    const transcript = dedupeTranscript(data.transcript ?? "").trim();
+    doc.fontSize(10).font("Helvetica").text(transcript || "(No transcript recorded.)", {
       align: "left",
     });
 
