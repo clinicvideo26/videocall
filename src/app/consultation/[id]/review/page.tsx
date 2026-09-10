@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { patientInstructionsFromSummary } from "@/lib/summary";
 import Brand from "@/app/_components/Brand";
 import { logout } from "@/app/dashboard/actions";
 import ReviewSummary from "@/app/call/[id]/ReviewSummary";
@@ -25,6 +26,7 @@ export default async function ReviewPage({
       name: true,
       patientPhone: true,
       summary: true,
+      patientMessage: true,
       transcript: true,
       status: true,
       clinicId: true,
@@ -32,6 +34,11 @@ export default async function ReviewPage({
   });
   if (!c) notFound();
   if (c.clinicId && c.clinicId !== session.clinicId) notFound();
+
+  // Use the stored patient message if the doctor already edited one; otherwise
+  // draft it from the summary's medication/plan/follow-up sections.
+  const patientDraft =
+    c.patientMessage ?? patientInstructionsFromSummary(c.summary ?? "");
 
   return (
     <>
@@ -74,7 +81,11 @@ export default async function ReviewPage({
         </div>
 
         <div className="card p-5">
-          <ReviewSummary consultationId={id} initialSummary={c.summary ?? ""} />
+          <ReviewSummary
+            consultationId={id}
+            initialSummary={c.summary ?? ""}
+            initialPatientMessage={patientDraft}
+          />
         </div>
 
         <details className="card p-5">

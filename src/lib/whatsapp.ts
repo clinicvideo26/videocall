@@ -202,6 +202,71 @@ export async function sendPatientAppointment(opts: {
   }
 }
 
+// --- Patient instruction message (video flow §7) ----------------------------
+// After the doctor approves the record, send the patient their "how to use your
+// medication" + follow-up instructions. A separate approved template; its BODY
+// takes one variable: {{1}} the instructions text (doctor-edited).
+
+type InstructionsConfig = {
+  phoneNumberId: string;
+  token: string;
+  template: string;
+  lang: string;
+};
+
+export function instructionsWhatsAppConfig(): InstructionsConfig | null {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const template = process.env.WHATSAPP_INSTRUCTIONS_TEMPLATE_NAME;
+  const lang = process.env.WHATSAPP_INSTRUCTIONS_TEMPLATE_LANG || "en";
+  if (!phoneNumberId || !token || !template) return null;
+  return { phoneNumberId, token, template, lang };
+}
+
+export function isInstructionsWhatsAppConfigured(): boolean {
+  return instructionsWhatsAppConfig() !== null;
+}
+
+/** Send the patient their doctor-approved instructions. Throws the Meta error
+ *  on failure so the caller can log it (best-effort). */
+export async function sendPatientInstructions(opts: {
+  patientPhone: string;
+  message: string;
+}): Promise<void> {
+  const cfg = instructionsWhatsAppConfig();
+  if (!cfg) throw new Error("Instructions WhatsApp template is not configured.");
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: toRecipient(opts.patientPhone),
+    type: "template",
+    template: {
+      name: cfg.template,
+      language: { code: cfg.lang },
+      components: [
+        { type: "body", parameters: [{ type: "text", text: opts.message }] },
+      ],
+    },
+  };
+
+  const res = await fetch(`${GRAPH}/${cfg.phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(
+      `WhatsApp instructions send failed (${res.status}): ${JSON.stringify(
+        data.error ?? data
+      )}`
+    );
+  }
+}
+
 // --- Staff login OTP over WhatsApp -------------------------------------------
 // Deliver the phone-login code via an approved Authentication template (e.g.
 // revive_login_otp) instead of only logging it. Reuses the same number/token.

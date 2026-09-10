@@ -1,9 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { summarizeTranscript } from "@/lib/summary";
+import { summarizeTranscript, patientInstructionsFromSummary } from "@/lib/summary";
 import { buildConsultationPdf } from "@/lib/pdf";
-import { isWhatsAppConfigured, sendWhatsAppPdf } from "@/lib/whatsapp";
+import {
+  isWhatsAppConfigured,
+  sendWhatsAppPdf,
+  isInstructionsWhatsAppConfigured,
+  sendPatientInstructions,
+} from "@/lib/whatsapp";
 
 // No login on the call page (spec 3.3). Records the patient's consent against
 // an existing consultation, then the client enters the Daily room.
@@ -35,7 +40,13 @@ type WhatsAppStatus = "sent" | "failed" | "not-configured";
 export async function endConsultation(
   id: string,
   transcript: string
-): Promise<{ ok: boolean; summary: string; summarized: boolean; error?: string }> {
+): Promise<{
+  ok: boolean;
+  summary: string;
+  patientMessage: string;
+  summarized: boolean;
+  error?: string;
+}> {
   const text = transcript.trim();
 
   try {
@@ -44,10 +55,16 @@ export async function endConsultation(
       data: { transcript: text, status: "review" },
     });
   } catch {
-    return { ok: false, summary: "", summarized: false, error: "Could not save the transcript." };
+    return {
+      ok: false,
+      summary: "",
+      patientMessage: "",
+      summarized: false,
+      error: "Could not save the transcript.",
+    };
   }
 
-  if (!text) return { ok: true, summary: "", summarized: false };
+  if (!text) return { ok: true, summary: "", patientMessage: "", summarized: false };
 
   let summary = "";
   let summarized = false;
@@ -62,6 +79,8 @@ export async function endConsultation(
   return {
     ok: true,
     summary,
+    // Draft patient message from the summary's medication/plan/follow-up parts.
+    patientMessage: patientInstructionsFromSummary(summary),
     summarized,
     error: summarized
       ? undefined
@@ -74,21 +93,38 @@ export async function endConsultation(
 // clinic's WhatsApp. WhatsApp is best-effort and never blocks finalising.
 export async function approveConsultation(
   id: string,
-  summary: string
-): Promise<{ ok: boolean; whatsapp?: WhatsAppStatus; error?: string }> {
+  summary: string,
+  patientMessage: string
+): Promise<{
+  ok: boolean;
+  whatsapp?: WhatsAppStatus;
+  patientWhatsapp?: "sent" | "failed";
+  error?: string;
+}> {
   const finalSummary = summary.trim();
+  const finalPatientMessage = patientMessage.trim();
 
-  let record: { name: string; createdAt: Date; transcript: string | null };
+  let record: {
+    name: string;
+    createdAt: Date;
+    transcript: string | null;
+    patientPhone: string | null;
+  };
   try {
     record = await prisma.consultation.update({
       where: { id },
-      data: { summary: finalSummary, status: "done" },
-      select: { name: true, createdAt: true, transcript: true },
+      data: {
+        summary: finalSummary,
+        patientMessage: finalPatientMessage || null,
+        status: "done",
+      },
+      select: { name: true, createdAt: true, transcript: true, patientPhone: true },
     });
   } catch {
     return { ok: false, error: "Could not save the summary." };
   }
 
+  // Full record PDF → clinic's WhatsApp (best-effort; also in the Transcripts tab).
   let whatsapp: WhatsAppStatus = "not-configured";
   if (isWhatsAppConfigured()) {
     try {
@@ -104,10 +140,29 @@ export async function approveConsultation(
       whatsapp = "sent";
     } catch (e) {
       whatsapp = "failed";
-      console.error("[whatsapp] delivery failed:", e);
+      console.error("[whatsapp] clinic PDF delivery failed:", e);
     }
   }
 
-  return { ok: true, whatsapp };
+  // Patient instructions → patient's WhatsApp (v2 §7; best-effort).
+  let patientWhatsapp: "sent" | "failed" | undefined;
+  if (
+    finalPatientMessage &&
+    record.patientPhone &&
+    isInstructionsWhatsAppConfigured()
+  ) {
+    try {
+      await sendPatientInstructions({
+        patientPhone: record.patientPhone,
+        message: finalPatientMessage,
+      });
+      patientWhatsapp = "sent";
+    } catch (e) {
+      patientWhatsapp = "failed";
+      console.error("[whatsapp] patient instructions failed:", e);
+    }
+  }
+
+  return { ok: true, whatsapp, patientWhatsapp };
 }
 

@@ -45,9 +45,21 @@ export default function TranscriptPanel({
 
   const [saving, startSaving] = useTransition();
   const [saveMsg, setSaveMsg] = useState("");
-  // Once the consultation is ended, the generated summary is shown here for the
-  // doctor to review/edit before approving (v2 §6). null = not yet ended.
-  const [reviewSummary, setReviewSummary] = useState<string | null>(null);
+  // Once the consultation is ended, the generated summary + drafted patient
+  // message are shown here for the doctor to review/edit (v2 §6/§7). null = not
+  // yet ended.
+  const [reviewData, setReviewData] = useState<{
+    summary: string;
+    patientMessage: string;
+  } | null>(null);
+  // Whether transcription has been started at least once, so the button reads
+  // "Resume" (not "Start") after a pause.
+  const [hasStarted, setHasStarted] = useState(false);
+
+  function startTranscription() {
+    setHasStarted(true);
+    start();
+  }
 
   // --- Auto-save --------------------------------------------------------------
   // So a forgotten "End & save" (or a closed tab / dropped call) never loses the
@@ -107,7 +119,10 @@ export default function TranscriptPanel({
     startSaving(async () => {
       const result = await endConsultation(consultationId, fullText);
       if (result.ok) {
-        setReviewSummary(result.summary);
+        setReviewData({
+          summary: result.summary,
+          patientMessage: result.patientMessage,
+        });
         if (!result.summarized && result.error) setSaveMsg(result.error);
       } else {
         setSaveMsg(result.error ?? "Could not save.");
@@ -119,13 +134,15 @@ export default function TranscriptPanel({
     <aside className="flex w-full flex-col gap-3 md:h-full md:w-96">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Live transcript</h2>
-        <button
-          type="button"
-          onClick={active ? stop : start}
-          className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
-        >
-          {active ? "Stop" : "Start transcription"}
-        </button>
+        {reviewData === null ? (
+          <button
+            type="button"
+            onClick={active ? stop : startTranscription}
+            className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {active ? "Pause" : hasStarted ? "Resume" : "Start transcription"}
+          </button>
+        ) : null}
       </div>
 
       <p
@@ -133,7 +150,7 @@ export default function TranscriptPanel({
           status === "reconnecting" ? "text-amber-600" : "text-gray-400"
         }`}
       >
-        {statusLabel[status]}
+        {status === "stopped" && hasStarted ? "Paused" : statusLabel[status]}
         {active && showPatientAudio ? (
           <span className="text-gray-400">
             {" "}
@@ -170,7 +187,7 @@ export default function TranscriptPanel({
         ))}
       </div>
 
-      {reviewSummary === null ? (
+      {reviewData === null ? (
         <>
           <button
             type="button"
@@ -187,7 +204,8 @@ export default function TranscriptPanel({
           {saveMsg ? <p className="mb-2 text-xs text-amber-600">{saveMsg}</p> : null}
           <ReviewSummary
             consultationId={consultationId}
-            initialSummary={reviewSummary}
+            initialSummary={reviewData.summary}
+            initialPatientMessage={reviewData.patientMessage}
           />
         </div>
       )}

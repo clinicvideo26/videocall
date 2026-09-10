@@ -30,3 +30,43 @@ export async function summarizeTranscript(transcript: string): Promise<string> {
     .join("")
     .trim();
 }
+
+// Draft the patient-facing message from the clinical summary — just the parts a
+// patient needs (medications / how to take them / advice / follow-up), pulled
+// from the labeled sections. No extra Claude call; the doctor reviews and edits
+// it before it's sent. Returns "" if none of those sections are present.
+const PATIENT_SECTIONS = new Set([
+  "medications",
+  "medication",
+  "plan / advice",
+  "plan/advice",
+  "plan",
+  "advice",
+  "follow-up",
+  "follow up",
+  "followup",
+]);
+
+export function patientInstructionsFromSummary(summary: string): string {
+  if (!summary) return "";
+  const headerRe = /^([A-Za-z][A-Za-z /-]*?):\s*(.*)$/;
+  const out: string[] = [];
+  let capturing = false;
+
+  for (const raw of summary.split(/\r?\n/)) {
+    const line = raw.trim();
+    const m = headerRe.exec(line);
+    if (m) {
+      capturing = PATIENT_SECTIONS.has(m[1].trim().toLowerCase());
+      if (capturing) {
+        const label = m[1].trim();
+        const rest = m[2].trim();
+        out.push(rest ? `${label}: ${rest}` : `${label}:`);
+      }
+    } else if (capturing && line) {
+      out.push(line);
+    }
+  }
+
+  return out.join("\n").trim();
+}

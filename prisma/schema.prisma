@@ -122,8 +122,11 @@ model Consultation {
   consentImprove Boolean            @default(false)
   /// Finalised transcript text.
   transcript     String?
-  /// Claude-generated summary.
+  /// Claude-generated clinical summary (for the record / clinic PDF).
   summary        String?
+  /// Doctor-approved patient message — the "how to use your medication" +
+  /// follow-up instructions sent to the patient's WhatsApp (v2 §7).
+  patientMessage String?
   /// Object-storage path to the generated PDF.
   pdfPath        String?
   /// Object-storage path to the audio recording.
