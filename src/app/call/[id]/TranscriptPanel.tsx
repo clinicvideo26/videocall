@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { MergedTranscription, ScribeStatus } from "@/lib/useScribeTranscription";
-import { finalizeConsultation } from "./actions";
+import { endConsultation } from "./actions";
+import ReviewSummary from "./ReviewSummary";
 
 const statusLabel: Record<ScribeStatus, string> = {
   idle: "Not started",
@@ -44,7 +45,9 @@ export default function TranscriptPanel({
 
   const [saving, startSaving] = useTransition();
   const [saveMsg, setSaveMsg] = useState("");
-  const [saved, setSaved] = useState(false);
+  // Once the consultation is ended, the generated summary is shown here for the
+  // doctor to review/edit before approving (v2 §6). null = not yet ended.
+  const [reviewSummary, setReviewSummary] = useState<string | null>(null);
 
   // --- Auto-save --------------------------------------------------------------
   // So a forgotten "End & save" (or a closed tab / dropped call) never loses the
@@ -102,21 +105,10 @@ export default function TranscriptPanel({
     setSaveMsg("");
     if (active) stop();
     startSaving(async () => {
-      const result = await finalizeConsultation(consultationId, fullText);
+      const result = await endConsultation(consultationId, fullText);
       if (result.ok) {
-        setSaved(true);
-        const bits: string[] = [
-          result.summarized
-            ? "Saved with summary."
-            : result.error ?? "Transcript saved.",
-        ];
-        if (result.whatsapp === "sent") {
-          bits.push("PDF sent to the clinic's WhatsApp.");
-        } else if (result.whatsapp === "failed") {
-          bits.push("WhatsApp delivery failed — the PDF is in the Transcripts tab.");
-        }
-        bits.push("View it in the Transcripts tab.");
-        setSaveMsg(bits.join(" "));
+        setReviewSummary(result.summary);
+        if (!result.summarized && result.error) setSaveMsg(result.error);
       } else {
         setSaveMsg(result.error ?? "Could not save.");
       }
@@ -178,15 +170,27 @@ export default function TranscriptPanel({
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={endAndSave}
-        disabled={saving || (committed.length === 0 && !saved)}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-50"
-      >
-        {saving ? "Saving…" : "End & save consultation"}
-      </button>
-      {saveMsg ? <p className="text-xs text-green-700">{saveMsg}</p> : null}
+      {reviewSummary === null ? (
+        <>
+          <button
+            type="button"
+            onClick={endAndSave}
+            disabled={saving || committed.length === 0}
+            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "End & save consultation"}
+          </button>
+          {saveMsg ? <p className="text-xs text-red-600">{saveMsg}</p> : null}
+        </>
+      ) : (
+        <div className="border-t border-gray-200 pt-3">
+          {saveMsg ? <p className="mb-2 text-xs text-amber-600">{saveMsg}</p> : null}
+          <ReviewSummary
+            consultationId={consultationId}
+            initialSummary={reviewSummary}
+          />
+        </div>
+      )}
     </aside>
   );
 }

@@ -85,16 +85,25 @@ export default async function QueuePage() {
                 >
                   {c.status}
                 </span>
-                <Link
-                  href={
-                    c.mode === "video"
-                      ? `/call/${c.id}`
-                      : `/consultation/${c.id}/audio`
-                  }
-                  className="btn btn-primary btn-sm"
-                >
-                  {c.mode === "video" ? "Join" : "Start"}
-                </Link>
+                {c.status === "review" ? (
+                  <Link
+                    href={`/consultation/${c.id}/review`}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Review
+                  </Link>
+                ) : (
+                  <Link
+                    href={
+                      c.mode === "video"
+                        ? `/call/${c.id}`
+                        : `/consultation/${c.id}/audio`
+                    }
+                    className="btn btn-primary btn-sm"
+                  >
+                    {c.mode === "video" ? "Join" : "Start"}
+                  </Link>
+                )}
               </div>
             </li>
           ))}

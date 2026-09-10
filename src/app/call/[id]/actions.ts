@@ -28,63 +28,79 @@ export async function recordConsent(
 
 type WhatsAppStatus = "sent" | "failed" | "not-configured";
 
-// End of call (spec 3.4): persist the final transcript, generate a summary via
-// Claude, mark the consultation done, and deliver the PDF to the clinic's
-// WhatsApp. Summary and WhatsApp are both best-effort — if either fails, the
-// transcript is still saved.
-export async function finalizeConsultation(
+// End of call, step 1 (v2 §6): persist the final transcript and generate the
+// Claude summary, then move the consultation to "review" so the doctor can
+// check and edit the summary before anything is sent. Does NOT produce or send
+// the PDF — that only happens on approveConsultation.
+export async function endConsultation(
   id: string,
   transcript: string
-): Promise<{
-  ok: boolean;
-  summarized: boolean;
-  whatsapp?: WhatsAppStatus;
-  error?: string;
-}> {
+): Promise<{ ok: boolean; summary: string; summarized: boolean; error?: string }> {
   const text = transcript.trim();
 
-  let record: { name: string; createdAt: Date };
   try {
-    record = await prisma.consultation.update({
+    await prisma.consultation.update({
       where: { id },
-      data: { transcript: text, status: "done" },
-      select: { name: true, createdAt: true },
+      data: { transcript: text, status: "review" },
     });
   } catch {
-    return { ok: false, summarized: false, error: "Could not save the transcript." };
+    return { ok: false, summary: "", summarized: false, error: "Could not save the transcript." };
   }
 
-  if (!text) return { ok: true, summarized: false };
+  if (!text) return { ok: true, summary: "", summarized: false };
 
-  let summary: string | null = null;
+  let summary = "";
   let summarized = false;
   try {
     summary = await summarizeTranscript(text);
     await prisma.consultation.update({ where: { id }, data: { summary } });
     summarized = true;
   } catch {
-    // Transcript is saved; summary can be regenerated later.
+    // Transcript is saved; the doctor can write the summary themselves.
   }
 
-  // Deliver the PDF to the clinic's WhatsApp (Step 8). Never let this fail the
-  // save — the PDF is always downloadable from the Transcripts tab regardless.
+  return {
+    ok: true,
+    summary,
+    summarized,
+    error: summarized
+      ? undefined
+      : "Summary could not be generated — you can write it yourself below.",
+  };
+}
+
+// End of call, step 2 (v2 §6): the doctor approved the (possibly edited)
+// summary. Persist it, mark the consultation done, and deliver the PDF to the
+// clinic's WhatsApp. WhatsApp is best-effort and never blocks finalising.
+export async function approveConsultation(
+  id: string,
+  summary: string
+): Promise<{ ok: boolean; whatsapp?: WhatsAppStatus; error?: string }> {
+  const finalSummary = summary.trim();
+
+  let record: { name: string; createdAt: Date; transcript: string | null };
+  try {
+    record = await prisma.consultation.update({
+      where: { id },
+      data: { summary: finalSummary, status: "done" },
+      select: { name: true, createdAt: true, transcript: true },
+    });
+  } catch {
+    return { ok: false, error: "Could not save the summary." };
+  }
+
   let whatsapp: WhatsAppStatus = "not-configured";
   if (isWhatsAppConfigured()) {
     try {
-      const pdf = await buildConsultationPdf({
+      const meta = {
         name: record.name,
         id,
         createdAt: record.createdAt,
-        summary,
-        transcript: text,
-      });
-      await sendWhatsAppPdf(pdf, {
-        name: record.name,
-        id,
-        createdAt: record.createdAt,
-        summary,
-        transcript: text,
-      });
+        summary: finalSummary,
+        transcript: record.transcript,
+      };
+      const pdf = await buildConsultationPdf(meta);
+      await sendWhatsAppPdf(pdf, meta);
       whatsapp = "sent";
     } catch (e) {
       whatsapp = "failed";
@@ -92,13 +108,6 @@ export async function finalizeConsultation(
     }
   }
 
-  return {
-    ok: true,
-    summarized,
-    whatsapp,
-    error: summarized
-      ? undefined
-      : "Transcript saved, but the summary could not be generated.",
-  };
+  return { ok: true, whatsapp };
 }
 
